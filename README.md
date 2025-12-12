@@ -1,11 +1,29 @@
 ## 概述
 
-从文档大概有两个目的：
+从文档大概有三个目的：
 
+1. **介绍如何编译项目**
 1. **存储设计**：在这个文档中，我们先探讨下存储格式，看看如何存储各种数据的，描述它能满足哪些查询需求。
-2. **多人协作开发**：然后探讨下系统的分层结构和模块化，以更好的实现多人协作并行开发。我们会以此安排任务，当然，具体的工作还需要详细勾兑进行细化（并记录到此文档里）。
+1. **多人协作开发**：然后探讨下系统的分层结构和模块化，以更好的实现多人协作并行开发。我们会以此安排任务，当然，具体的工作还需要详细勾兑进行细化（并记录到此文档里）。
 
 > 此文档，会且应该不断地更新
+
+## 编译
+1. **安装vcpkg(需要VPN)**
+    1. clone 我们使用fork过的[https://github.com/IronsDu/vcpkg](https://github.com/IronsDu/vcpkg)
+    1. 运行clone得到的vcpkg文件夹中的`bootstrap-vcpkg.sh`脚本，完成vcpkg的编译
+1. **构建本项目(需要VPN)**
+    1. 先在项目根目录下，运行以下命令生成CMake的build工程（通过`-DCMAKE_BUILD_TYPE=Release`生成Release版本）
+    ```bash
+    cmake -B ./build -S . -DCMAKE_TOOLCHAIN_FILE=<PathToVcpkgDir>/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+    ```
+    2. 使用cmake编译程序（我们后续可以指定编译Release）
+    ```bash
+    cmake --build ./build
+    ```
+1. **IDE支持**
+    1. 参考我们知识库中的文档：[Windows下使用Visual Studio通过CMake/WSL开发Linux程序](http://10.86.11.249:8090/pages/viewpage.action?pageId=84803838)。
+
 
 ## 存储格式
 这个章节讲解我们如何存储图存储里所涉及的一些对象（有四个：Label类型、Relation类型、Label点实例、Relation边实例），边的存储设计会影响其他类型的存储格式，但我们会最后讲边的存储格式，所以在其他设计中有疑惑的时候很正常，在看到边的设计时就自然明白了。
@@ -112,7 +130,7 @@
 ### 3. 通信层
 * 定义HTTP请求和响应的结构
     * 它可以独立于算法的实现，就可以编写通信层的代码。算法只是返回通信层所需的结构对象就行。
-* 我们可以采用[`proxygen`](https://github.com/facebook/proxygen)库来编写。
+* 我们采用[`drogon`](https://github.com/drogonframework/drogon)库来编写。
 
 * 代码位置
     * `src/service/http/*.hpp`
@@ -158,6 +176,7 @@ TODO
         > 定义好接口后，我们可以先实现memory，可以手动mock数据，以此来提供给算法等其他模块来测试。
 
 3. **数据导入功能**
+* 我们使用[xlnt](https://github.com/xlnt-community/xlnt)来读取excel文件。在`src\importer\importer.hpp`中实现功能。
 * 依赖的任务:
     1. (1)
     2. (2)
@@ -189,6 +208,7 @@ TODO
     2. (2)
 
 7. **根据算法接口实现HTTP接口**
+在`src\http\euleraph_http_handle.hpp`中添加和实现接口。
 * 依赖的任务:
     1. (1)
     2. (2)

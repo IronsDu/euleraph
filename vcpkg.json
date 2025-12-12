@@ -1,6 +1,8 @@
 {
   "dependencies": [
-    "proxygen",
-    "wiredtiger"
-  ]
+    "wiredtiger",
+    "drogon",
+    "xlnt"
+  ],
+  "builtin-baseline": "f36d46a4decd4b5dc1707f094f00e8f6b577da39"
 }
