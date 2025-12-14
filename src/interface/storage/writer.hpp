@@ -1,11 +1,31 @@
 #pragma once
 
+#include <vector>
 #include "interface/types/types.hpp"
 
 // 写入数据的抽象接口
 // 此接口较为低阶, 直接面向存储引擎, 不直接用于服务层
 class WriterInterface
 {
+public:
+    // 定义写入接口所需的顶点结构体
+    struct Vertex
+    {
+        LabelTypeId label_type_id; // 标签类型ID
+        VertexPk    vertex_pk;     // 顶点唯一标识
+    };
+
+    // 定义写入接口所需的边结构体
+    struct Edge
+    {
+        RelationTypeId relation_type_id;    // 关系类型ID
+        LabelTypeId    start_label_type_id; // 起始标签类型ID
+        VertexId       start_vertex_id;     // 起始顶点ID
+        EdgeDirection  direction;           // 边的方向
+        LabelTypeId    end_label_type_id;   // 终点标签类型ID
+        VertexId       end_vertex_id;       // 终点顶点ID
+    };
+
 public:
     virtual ~WriterInterface() = default;
 
@@ -20,19 +40,22 @@ public:
     virtual RelationTypeId write_relation_type(const RelationType& relation_type) = 0;
 
     // @brief 写入顶点, 如果已经存在则返回已存在的顶点ID
-    // @param label_type_id 标签类型ID
-    // @param vertex_pk 顶点唯一标识
+    // @param vertice 顶点
     // @return 顶点ID
-    virtual VertexId write_vertex(const LabelTypeId& label_type_id, const VertexPk& vertex_pk) = 0;
+    virtual VertexId write_vertex(const Vertex& vertice) = 0;
+
+    // @brief 批量写入顶点, 如果已经存在则返回已存在的顶点ID
+    // @param vertices 顶点列表
+    // @return 顶点ID列表, 顺序与输入顶点列表一致
+    virtual std::vector<VertexId> write_vertices(const std::vector<Vertex>& vertices) = 0;
 
     // @brief 写入边
-    // @param relation_type_id 关系类型ID
-    // @param start_label_type_id 起始标签类型ID
-    // @param start_vertex_id 起始顶点ID
-    // @param direction 边的方向
-    // @param end_label_type_id 终点标签类型ID
-    // @param end_vertex_id 终点顶点ID
+    // @param edge 边
     // @return 边ID
-    virtual EdgeId  write_edge(RelationTypeId relation_type_id, LabelTypeId start_label_type_id, VertexId start_vertex_id, EdgeDirection direction, LabelTypeId end_label_type_id,
-        VertexId end_vertex_id) = 0;
+    virtual EdgeId write_edge(const Edge& edge) = 0;
+
+    // @brief 批量写入边
+    // @param edges 边列表
+    // @return 边ID列表, 顺序与输入边列表一致
+    virtual std::vector<EdgeId> write_edges(const std::vector<Edge>& edges) = 0;
 };
