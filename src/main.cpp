@@ -4,7 +4,9 @@
 
 #include "importer/importer.hpp"
 #include "service/http/euleraph_http_handle.hpp"
+#include "storage/reader_wiredtiger.hpp"
 #include "storage/writer_wiredtiger.hpp"
+#include "storage/wiredtiger_common.hpp"
 
 using namespace drogon;
 
@@ -20,7 +22,7 @@ _/ __ \|  |  \  | _/ __ \_  __ \__  \ \____ \|  |  \
 )";
     std::cout << log << std::endl;
 
-    WriterWiredTiger::initialize_databse_schema();
+    wiredtiger_initialize_databse_schema("graph_database");
 
     if (true)
     {

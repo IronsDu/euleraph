@@ -9,10 +9,6 @@
 class WriterWiredTiger : public WriterInterface
 {
 public:
-    // 初始化数据库模式, 创建所需的表和索引
-    static void initialize_databse_schema();
-
-public:
     WriterWiredTiger(WT_CONNECTION* conn);
     ~WriterWiredTiger();
 

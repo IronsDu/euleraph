@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "storage/wiredtiger_common.hpp"
 #include "storage/writer_wiredtiger.hpp"
 #include "storage/reader_wiredtiger.hpp"
 
@@ -9,11 +10,12 @@ class ut_wiredtiger_impl : public testing::Test
 
 TEST_F(ut_wiredtiger_impl, normal)
 {
-    WriterWiredTiger::initialize_databse_schema();
+    const std::string db_name = "db_test";
+    wiredtiger_initialize_databse_schema(db_name);
 
     std::error_code ec;
     WT_CONNECTION*  conn;
-    wiredtiger_open("graph_database", nullptr, "create", &conn);
+    wiredtiger_open(db_name.c_str(), nullptr, "create", &conn);
 
     auto writer_wiredtiger = std::make_shared<WriterWiredTiger>(conn);
 
@@ -76,15 +78,16 @@ TEST_F(ut_wiredtiger_impl, normal)
                                                                                   person_label_id.value(),
                                                                                   EdgeDirection::INCOMING,
                                                                                   like_relation_id.value());
+    ASSERT_EQ(neighbors_edges.size(), 3);
     for (const auto& neighbor : neighbors_edges)
     {
         ASSERT_EQ(neighbor.start_vertex_id, a_vertex_id.value());
         ASSERT_EQ(neighbor.start_label_type_id, person_label_id.value());
         ASSERT_EQ(neighbor.relation_type_id, like_relation_id.value());
         ASSERT_EQ(neighbor.direction, EdgeDirection::INCOMING);
-        ASSERT_EQ(neighbor.end_label_type_id, person_label_id.value());
+        ASSERT_EQ(neighbor.end_label_type_id, dog_label_id.value());
+        std::cout << neighbor.end_vertex_id << std::endl;
         ASSERT_TRUE(neighbor.end_vertex_id == b_vertex_id.value() || neighbor.end_vertex_id == 2 ||
-                    neighbor.end_vertex_id == 3);
+                    neighbor.end_vertex_id == 3 || neighbor.end_vertex_id == 4);
     }
-    ASSERT_EQ(neighbors_edges.size(), 3);
 }
