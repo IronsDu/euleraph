@@ -5,7 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 
 include_directories("${PROJECT_SOURCE_DIR}/src")
 
-add_executable(euleraph src/main.cpp "src/service/http/euleraph_http_handle.cpp" "src/importer/importer.cpp" "src/storage/writer_wiredtiger.cpp" "src/storage/reader_wiredtiger.cpp")
+add_executable(euleraph src/main.cpp 
+"src/service/http/euleraph_http_handle.cpp" 
+"src/importer/importer.cpp"
+"src/storage/writer_wiredtiger.cpp"
+"src/storage/reader_wiredtiger.cpp"
+"src/storage/wiredtiger_common.cpp")
 
 find_package(Drogon CONFIG REQUIRED)
 find_package(Xlnt CONFIG REQUIRED)
