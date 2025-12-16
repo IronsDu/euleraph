@@ -51,11 +51,9 @@ public:
 
     // @brief 写入边
     // @param edge 边
-    // @return 边ID
-    virtual EdgeId write_edge(const Edge& edge) = 0;
+    virtual void write_edge(const Edge& edge) = 0;
 
     // @brief 批量写入边
     // @param edges 边列表
-    // @return 边ID列表, 顺序与输入边列表一致
-    virtual std::vector<EdgeId> write_edges(const std::vector<Edge>& edges) = 0;
+    virtual void write_edges(const std::vector<Edge>& edges) = 0;
 };

@@ -32,6 +32,7 @@ public:
     // @param direction 边的方向
     // @param relation_type_id 可选的关系类型ID, 如果提供则只返回该关系类型的邻居边
     virtual std::vector<Edge> get_neighbors_by_start_vertex(const VertexId&               start_vertex_id,
+                                                            const LabelTypeId&            start_label_type_id,
                                                             EdgeDirection                 direction,
                                                             std::optional<RelationTypeId> relation_type_id) = 0;
 };

@@ -25,7 +25,7 @@ using EdgeId = std::uint64_t;
 // 实际存储中, 边是有向的
 // 当写入无向边时, 需要为起点和终点各写入一条有向边, 起点为出边, 终点为入边
 // 当查询无向边时, 需要同时查询起点的入边和出边
-enum class EdgeDirection
+enum class EdgeDirection : uint8_t
 {
     // 出边
     OUTGOING,
@@ -38,8 +38,6 @@ enum class EdgeDirection
 // 边结构体, 表示图中的一条边
 struct Edge
 {
-    // 边ID
-    EdgeId id;
     // 关系类型ID
     RelationTypeId relation_type_id;
     // 起始标签类型ID

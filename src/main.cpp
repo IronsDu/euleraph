@@ -4,6 +4,7 @@
 
 #include "importer/importer.hpp"
 #include "service/http/euleraph_http_handle.hpp"
+#include "storage/writer_wiredtiger.hpp"
 
 using namespace drogon;
 
@@ -18,6 +19,8 @@ _/ __ \|  |  \  | _/ __ \_  __ \__  \ \____ \|  |  \
      \/                \/           \/|__|        \/ 
 )";
     std::cout << log << std::endl;
+
+    WriterWiredTiger::initialize_databse_schema();
 
     if (true)
     {
