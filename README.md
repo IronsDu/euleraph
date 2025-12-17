@@ -9,11 +9,16 @@
 > 此文档，会且应该不断地更新
 
 ## 编译
+1. **安装系统依赖**
+    - Ubuntu下使用下面命令安装：
+        -  `apt-get install swig python3-dev libtool autoconf autoconf-archive automake`
 1. **安装vcpkg(需要VPN)**
     1. clone 我们使用fork过的[https://github.com/IronsDu/vcpkg](https://github.com/IronsDu/vcpkg)
+        - `git clone https://github.com/IronsDu/vcpkg.git`
     1. 运行clone得到的vcpkg文件夹中的`bootstrap-vcpkg.sh`脚本，完成vcpkg的编译
+        - `cd vcpkg & ./bootstrap-vcpkg.sh`
 1. **构建本项目(需要VPN)**
-    1. 先在项目根目录下，运行以下命令生成CMake的build工程（通过`-DCMAKE_BUILD_TYPE=Release`生成Release版本）
+    1. 先在项目根目录下，运行以下命令生成CMake的build工程，默认为`RelWithDebInfo`版本,通过`-DCMAKE_BUILD_TYPE=Release`生成Release版本.
     ```bash
     cmake -B ./build -S . -DCMAKE_TOOLCHAIN_FILE=<PathToVcpkgDir>/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
     ```
