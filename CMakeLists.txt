@@ -14,11 +14,12 @@ add_executable(euleraph src/main.cpp
 
 find_package(Drogon CONFIG REQUIRED)
 find_package(Xlnt CONFIG REQUIRED)
+find_package(args CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(WIREDTIGER REQUIRED wiredtiger)
 
 target_include_directories(euleraph PRIVATE ${WIREDTIGER_INCLUDE_DIRS})
 target_link_directories(euleraph PRIVATE ${WIREDTIGER_LIBRARY_DIRS})
-target_link_libraries(euleraph PRIVATE Drogon::Drogon ${WIREDTIGER_LIBRARIES} xlnt::xlnt)
+target_link_libraries(euleraph PRIVATE Drogon::Drogon ${WIREDTIGER_LIBRARIES} xlnt::xlnt taywee::args)
 
 add_subdirectory(test)
