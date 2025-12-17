@@ -51,6 +51,35 @@ std::optional<LabelTypeId> ReaderWiredTiger::get_label_type_id(const LabelType& 
     return record_number;
 }
 
+std::optional<LabelType> ReaderWiredTiger::get_label_type_by_id(LabelTypeId label_type_id)
+{
+    int        code   = 0;
+    WT_CURSOR* cursor = nullptr;
+    DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+
+    code = session_->open_cursor(session_, "table:label_type(name)", nullptr, nullptr, &cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    cursor->set_key(cursor, label_type_id);
+    code = cursor->search(cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    const char* label_type_name = nullptr;
+    code                        = cursor->get_value(cursor, &label_type_name);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    return LabelType(label_type_name);
+}
+
 std::optional<RelationTypeId> ReaderWiredTiger::get_relation_type_id(const RelationType& relation_type)
 {
     const auto it = relation_type_cache_.find(relation_type);
@@ -93,6 +122,35 @@ std::optional<RelationTypeId> ReaderWiredTiger::get_relation_type_id(const Relat
     return record_number;
 }
 
+std::optional<RelationType> ReaderWiredTiger::get_relation_type_by_id(RelationTypeId relation_type_id)
+{
+    int        code   = 0;
+    WT_CURSOR* cursor = nullptr;
+    DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+
+    code = session_->open_cursor(session_, "table:relation_type(name)", nullptr, nullptr, &cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    cursor->set_key(cursor, relation_type_id);
+    code = cursor->search(cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    const char* relation_type_name = nullptr;
+    code                           = cursor->get_value(cursor, &relation_type_name);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    return RelationType(relation_type_name);
+}
+
 std::optional<VertexId> ReaderWiredTiger::get_vertex_id(const LabelTypeId& label_type_id, const VertexPk& vertex_pk)
 {
     int        code   = 0;
@@ -120,6 +178,35 @@ std::optional<VertexId> ReaderWiredTiger::get_vertex_id(const LabelTypeId& label
     }
 
     return record_number;
+}
+
+std::optional<VertexPk> ReaderWiredTiger::get_vertex_pk_by_id(VertexId vertex_id)
+{
+    int        code   = 0;
+    WT_CURSOR* cursor = nullptr;
+    DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+
+    code = session_->open_cursor(session_, "table:vertex(vertex_ident)", nullptr, nullptr, &cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    cursor->set_key(cursor, vertex_id);
+    code = cursor->search(cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    const char* vertex_pk = nullptr;
+    code                  = cursor->get_value(cursor, &vertex_pk);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    return VertexPk(vertex_pk);
 }
 
 std::vector<Edge> ReaderWiredTiger::get_neighbors_by_start_vertex(const VertexId&               start_vertex_id,
