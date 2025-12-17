@@ -21,7 +21,7 @@ target_link_libraries(
 
 target_include_directories(wiredtiger_impl_unit_test PRIVATE ${WIREDTIGER_INCLUDE_DIRS})
 target_link_directories(wiredtiger_impl_unit_test PRIVATE ${WIREDTIGER_LIBRARY_DIRS})
-target_link_libraries(wiredtiger_impl_unit_test PRIVATE Drogon::Drogon ${WIREDTIGER_LIBRARIES} xlnt::xlnt)
+target_link_libraries(wiredtiger_impl_unit_test PRIVATE Drogon::Drogon ${WIREDTIGER_LIBRARIES} xlnt::xlnt spdlog::spdlog)
 
 add_test(
     NAME wiredtiger_impl_unit_test

@@ -10,6 +10,8 @@
 #include "storage/writer_wiredtiger.hpp"
 #include "storage/wiredtiger_common.hpp"
 #include "utils/thread_pool.hpp"
+#include "utils/gaudy.hpp"
+#include "log/log.hpp"
 
 using namespace drogon;
 
@@ -28,17 +30,20 @@ static std::shared_ptr<WriterInterface>       make_writer()
 
 int main(int argc, char** argv)
 {
+    initialize_log();
+
     args::ArgumentParser parser("This is a euleraph program.", "This goes after the options.");
 
-    const std::string log = R"(
-             .__                             .__     
-  ____  __ __|  |   ________________  ______ |  |__  
-_/ __ \|  |  \  | _/ __ \_  __ \__  \ \____ \|  |  \ 
-\  ___/|  |  /  |_\  ___/|  | \// __ \|  |_> >   Y  \
- \___  >____/|____/\___  >__|  (____  /   __/|___|  /
-     \/                \/           \/|__|        \/ 
+    const std::string logo = R"(
+___________     .__                             .__     
+\_   _____/__ __|  |   ________________  ______ |  |__  
+ |    __)_|  |  \  | _/ __ \_  __ \__  \ \____ \|  |  \ 
+ |        \  |  /  |_\  ___/|  | \// __ \|  |_> >   Y  \
+/_______  /____/|____/\___  >__|  (____  /   __/|___|  /
+        \/                \/           \/|__|        \/ 
 )";
-    std::cout << log << std::endl;
+
+    play_neon_banner(logo);
 
     wiredtiger_initialize_databse_schema("graph_database");
 
