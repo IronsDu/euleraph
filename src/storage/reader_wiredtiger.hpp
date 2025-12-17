@@ -12,10 +12,14 @@ public:
 
 public:
     std::optional<LabelTypeId>    get_label_type_id(const LabelType& label_type) override;
+    std::optional<LabelType>      get_label_type_by_id(LabelTypeId label_type_id) override;
     std::optional<RelationTypeId> get_relation_type_id(const RelationType& relation_type) override;
+    std::optional<RelationType>   get_relation_type_by_id(RelationTypeId relation_type_id) override;
 
     // 目前label_type_id参数没有使用, 因为比赛数据里顶点标识是全局唯一的
     std::optional<VertexId> get_vertex_id(const LabelTypeId& label_type_id, const VertexPk& vertex_pk) override;
+    std::optional<VertexPk> get_vertex_pk_by_id(VertexId vertex_id) override;
+
     // 目前start_label_type_id参数只是在构造返回的边中使用
     std::vector<Edge> get_neighbors_by_start_vertex(const VertexId&               start_vertex_id,
                                                     const LabelTypeId&            start_label_type_id,
