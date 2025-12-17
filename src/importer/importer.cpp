@@ -18,8 +18,6 @@
 
 using namespace std;
 
-static constexpr std::size_t BATCH_SIZE = 1000;
-
 struct EdgeRowData
 {
     string         start_pk;
@@ -148,6 +146,7 @@ static void import_edges_first_step(std::vector<EdgeRowData>&                  e
 
 void Importer::import_data(const std::string&     file_path,
                            int                    write_edge_thread_pool_concurrency_num,
+                           int                    batch_size,
                            WriterInterfaceFactory wirter_interface_generator,
                            ReaderInterfaceFactory reader_interface_factory)
 {
@@ -186,7 +185,7 @@ void Importer::import_data(const std::string&     file_path,
     const auto async_task_wg = std::make_shared<WaitGroup>();
 
     auto batch_edge_row = std::make_shared<std::vector<EdgeRowData>>();
-    batch_edge_row->reserve(BATCH_SIZE);
+    batch_edge_row->reserve(batch_size);
     auto run_write_task = [=, &batch_edge_row]() {
         if (!batch_edge_row->empty())
         {
@@ -204,7 +203,7 @@ void Importer::import_data(const std::string&     file_path,
                                         writed_edges_num);
             });
             batch_edge_row = std::make_shared<std::vector<EdgeRowData>>();
-            batch_edge_row->reserve(BATCH_SIZE);
+            batch_edge_row->reserve(batch_size);
         }
     };
 
@@ -242,7 +241,7 @@ void Importer::import_data(const std::string&     file_path,
 
         batch_edge_row->emplace_back(std::move(edgeRowData));
 
-        if (batch_edge_row->size() >= BATCH_SIZE)
+        if (batch_edge_row->size() >= batch_size)
         {
 
             auto t_end        = std::chrono::steady_clock::now();

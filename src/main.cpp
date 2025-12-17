@@ -15,6 +15,83 @@
 
 using namespace drogon;
 
+struct cli_args
+{
+    std::string path;
+    int         batch_size;
+    int         concurrency;
+    int         port;
+};
+
+constexpr int DEFAULT_BATCH_SIZE = 100000;
+constexpr int PORT               = 8200;
+
+static int DefaultConcurrency()
+{
+    unsigned n = std::thread::hardware_concurrency() * 2;
+    return (n == 0u) ? 1 : static_cast<int>(n);
+}
+
+bool parse_cli_args(int argc, char** argv, cli_args& out_args) {
+    // 附默认值
+    out_args.batch_size   = DEFAULT_BATCH_SIZE;
+    out_args.concurrency  = DefaultConcurrency();
+    out_args.port         = PORT;
+
+    args::ArgumentParser parser("This is a euleraph program.", "This goes after the options.");
+
+    args::HelpFlag help(parser, "help", "Show this help menu", {'h', "help"});
+
+    args::ValueFlag<std::string> path(parser, "data_path", "input data path (required unless -h)",
+                                      {'d', "data_path"});
+
+    args::ValueFlag<int> batch_size(parser, "batch_size", "batch size (optional)",
+                                    {'b', "batch_size"});
+    args::ValueFlag<int> concurrency(parser, "concurrency", "Concurrency (optional)",
+                                     {'c', "concurrency"});
+    args::ValueFlag<int> port(parser, "port", "Port (optional)",
+                              {'p', "port"});
+
+    try {
+        parser.ParseCLI(argc, argv);
+
+        if (help) {
+            std::cout << parser << std::endl;
+            return false;
+        }
+
+        if (!path) {
+            std::cerr << "Error: 必须指定路径 (-d/--data_path) 或者使用-h查看帮助\n\n";
+            // std::cerr << parser << std::endl;
+            return false;
+        }
+
+        // 必填赋值
+        out_args.path = args::get(path);
+
+        // 可选覆盖默认值
+        if (batch_size)  out_args.batch_size  = args::get(batch_size);
+        if (concurrency) out_args.concurrency = args::get(concurrency);
+        if (port)        out_args.port        = args::get(port);
+
+        return true;
+    }
+    catch (const args::Help&) {
+        std::cout << parser << std::endl;
+        return false;
+    }
+    catch (const args::ParseError& e) {
+        std::cerr << "ParseError: " << e.what() << "\n\n";
+        // std::cerr << parser << std::endl;
+        return false;
+    }
+    catch (const args::ValidationError& e) {
+        std::cerr << "ValidationError: " << e.what() << "\n\n";
+        // std::cerr << parser << std::endl;
+        return false;
+    }
+}
+
 // 全局链接
 WT_CONNECTION* conn = nullptr;
 // 每一个线程一个writer对象
@@ -42,8 +119,6 @@ int main(int argc, char** argv)
 {
     initialize_log();
 
-    args::ArgumentParser parser("This is a euleraph program.", "This goes after the options.");
-
     const std::string logo = R"(
 ___________     .__                             .__     
 \_   _____/__ __|  |   ________________  ______ |  |__  
@@ -62,13 +137,24 @@ ___________     .__                             .__
         std::cerr << "open failed" << std::endl;
     }
 
+    auto thread_pool = std::make_shared<ThreadPool>(std::thread::hardware_concurrency() * 2);
+
+    // 解析用户参数
+    cli_args param;
+
+    if (!parse_cli_args(argc, argv, param))
+    {
+        return 0;
+    }
+
     if (true)
     {
         try
         {
             Importer importer;
-            importer.import_data("data/large_test_data.xlsx",
-                                 std::thread::hardware_concurrency() * 2,
+            importer.import_data(param.path,
+                                 param.concurrency,
+                                 param.batch_size,
                                  make_writer,
                                  make_reader);
 
