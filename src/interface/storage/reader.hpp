@@ -45,6 +45,7 @@ public:
     // @param vertex_pk 顶点唯一标识
     // @return 顶点ID, 如果不存在则返回std::nullopt
     virtual std::optional<VertexId> get_vertex_id(const LabelTypeId& label_type_id, const VertexPk& vertex_pk) = 0;
+    virtual std::optional<VertexId> get_vertex_id(const VertexPk& vertex_pk) = 0;
 
     // @brief 根据顶点id获取其顶点标识(字符串)
     // @param vertex_id 顶点id(全局唯一)
