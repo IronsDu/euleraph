@@ -2,6 +2,8 @@
 
 #include <vector>
 #include "interface/types/types.hpp"
+#include "interface/storage/reader.hpp"
+#include <memory>
 
 struct KHopQueryParams {
     int k = 0; // 跳数（K ≥ 1）
@@ -21,13 +23,15 @@ class AlgoInterface
 public:
     virtual ~AlgoInterface() = default;
 
-    // @brief K度邻居算法，根据输入的vertex_id_list，获取K度共同邻居的总数
+    // @brief K度邻居算法，根据输入的vertex_id_list，获取K度邻居的总数
     // @param 见KHopQueryParams
-    // @return k度共同邻居总数
-    virtual int get_k_hop_neighbor_count(const KHopQueryParams& params) = 0;
+    // @return k度邻居总数
+    virtual int get_k_hop_neighbor_count(const KHopQueryParams& params, std::shared_ptr<ReaderInterface> reader) = 0;
 
     // @brief 共同邻居算法，根据输入的vertex_id_list，获取共同邻居的总数
     // @param 见CommonNeighborQueryParams
     // @return 共同邻居总数
-    virtual int get_common_neighbor_count(const KHopQueryParams& params) = 0;
+    virtual int get_common_neighbor_count(const CommonNeighborQueryParams& params, std::shared_ptr<ReaderInterface> reader) = 0;
 };
+
+std::shared_ptr<AlgoInterface> create_algo();

@@ -117,14 +117,16 @@ ___________     .__                             .__
                           {Get});
     app().registerHandler("/k_hop_neighbor_query",
                           [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-                              EuleraphHttpHandle::k_hop_neighbor_query(req, std::move(callback));
+                              auto reader = std::make_shared<ReaderWiredTiger>(conn);
+                              EuleraphHttpHandle::k_hop_neighbor_query(req, std::move(callback), reader);
                           },
-                          {Get});
+                          {Post});
     app().registerHandler("/common_neighbor_query",
                           [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-                              EuleraphHttpHandle::common_neighbor_query(req, std::move(callback));
+                              auto reader = std::make_shared<ReaderWiredTiger>(conn);
+                              EuleraphHttpHandle::common_neighbor_query(req, std::move(callback), reader);
                           },
-                          {Get});
+                          {Post});
 
     app().run();
 

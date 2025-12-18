@@ -25,7 +25,8 @@ add_executable(euleraph src/main.cpp
 "src/importer/importer.cpp"
 "src/storage/writer_wiredtiger.cpp"
 "src/storage/reader_wiredtiger.cpp"
-"src/storage/wiredtiger_common.cpp")
+"src/storage/wiredtiger_common.cpp"
+"src/algo/algo_Implementation.cpp")
 
 find_package(Drogon CONFIG REQUIRED)
 find_package(Xlnt CONFIG REQUIRED)

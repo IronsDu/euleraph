@@ -4,6 +4,7 @@
 #include "interface/algo/algo.hpp"
 #include <vector>
 #include <drogon/drogon.h>
+#include <spdlog/spdlog.h>
 
 void EuleraphHttpHandle::ping(const HttpRequestPtr& req, drogon::AdviceCallback&& callback)
 {
@@ -14,23 +15,29 @@ void EuleraphHttpHandle::ping(const HttpRequestPtr& req, drogon::AdviceCallback&
     callback(resp);
 }
 
-KHopQueryParams parse_khop_query_params(const Json::Value& jsonBody)
+std::optional<KHopQueryParams> parse_khop_query_params(const Json::Value&               jsonBody,
+                                                       std::shared_ptr<ReaderInterface> reader)
 {
     KHopQueryParams params;
     // 1. 提取 node_ids
     if (!jsonBody.isMember("node_ids") || !jsonBody["node_ids"].isArray())
     {
-        throw std::runtime_error("Missing or invalid 'node_ids' array");
+        spdlog::error("Missing or invalid 'node_ids' array");
+        return std::nullopt;
     }
 
     for (const auto& item : jsonBody["node_ids"])
     {
         if (!item.isString())
-            throw std::runtime_error("All items in 'node_ids' must be strings");
-        auto node_id = get_vertex_id(item.asString());
+        {
+            spdlog::error("All items in 'node_ids' must be strings");
+            return std::nullopt;
+        }
+        auto node_id = reader->get_vertex_id(0, item.asString());
         if (!node_id)
         {
-            throw std::runtime_error("Vertex not found: " + item.asString());
+            spdlog::error("Vertex not found:{}", item.asString());
+            return std::nullopt;
         }
         params.vertex_id_list.push_back(*node_id);
     }
@@ -38,25 +45,31 @@ KHopQueryParams parse_khop_query_params(const Json::Value& jsonBody)
     // 2. 提取 k
     if (!jsonBody.isMember("k") || !jsonBody["k"].isNumeric())
     {
-        throw std::runtime_error("Missing or invalid 'k'");
+        spdlog::error("Missing or invalid 'k'");
+        return std::nullopt;
     }
     params.k = jsonBody["k"].asInt();
 
     // 3. 提取可选 n_labels
     if (!jsonBody.isMember("n_labels") || !jsonBody["n_labels"].isArray())
     {
-        throw std::runtime_error("Missing or invalid 'n_labels' array");
+        spdlog::error("Missing or invalid 'n_labels' array");
+        return std::nullopt;
     }
-    if (!n_labels.is_null())
+    if (!jsonBody["n_labels"].empty())
     {
         for (const auto& item : jsonBody["n_labels"])
         {
             if (!item.isString())
-                throw std::runtime_error("All items in 'n_labels' must be strings");
-            auto node_label_type_id = ReaderInterface::get_label_type_id(item);
+            {
+                spdlog::error("All items in 'n_labels' must be strings");
+                return std::nullopt;
+            }
+            auto node_label_type_id = reader->get_label_type_id(item.asString());
             if (!node_label_type_id)
             {
-                throw std::runtime_error("Label label not found: " + item);
+                spdlog::error("Label label not found:{}", item.asString());
+                return std::nullopt;
             }
             params.node_label_type_id_list.push_back(*node_label_type_id);
         }
@@ -65,18 +78,23 @@ KHopQueryParams parse_khop_query_params(const Json::Value& jsonBody)
     // 4.提取可选 r_labels
     if (!jsonBody.isMember("r_labels") || !jsonBody["r_labels"].isArray())
     {
-        throw std::runtime_error("Missing or invalid 'r_labels' array");
+        spdlog::error("Missing or invalid 'r_labels' array");
+        return std::nullopt;
     }
-    if (!r_labels.is_null())
+    if (!jsonBody["r_labels"].empty())
     {
         for (const auto& item : jsonBody["r_labels"])
         {
             if (!item.isString())
-                throw std::runtime_error("All items in 'r_labels' must be strings");
-            auto relation_label_type_id = ReaderInterface::get_relation_type_id(item);
+            {
+                spdlog::error("All items in 'r_labels' must be strings");
+                return std::nullopt;
+            }
+            auto relation_label_type_id = reader->get_relation_type_id(item.asString());
             if (!relation_label_type_id)
             {
-                throw std::runtime_error("Relation label not found: " + item);
+                spdlog::error("Relation label not found:{}", item.asString());
+                return std::nullopt;
             }
             params.relation_label_type_id_list.push_back(*relation_label_type_id);
         }
@@ -85,14 +103,16 @@ KHopQueryParams parse_khop_query_params(const Json::Value& jsonBody)
     // 5.提取 direction
     if (!jsonBody.isMember("direction") || !jsonBody["direction"].isNumeric())
     {
-        throw std::runtime_error("Missing or invalid 'direction'");
+        spdlog::error("Missing or invalid 'direction'");
+        return std::nullopt;
     }
     params.direction = jsonBody["direction"].asInt();
     return params;
 }
 
 void EuleraphHttpHandle::k_hop_neighbor_query(const HttpRequestPtr&                         req,
-                                              std::function<void(const HttpResponsePtr&)>&& callback)
+                                              std::function<void(const HttpResponsePtr&)>&& callback,
+                                              std::shared_ptr<ReaderInterface>              reader)
 {
     // 1. 检查 Content-Type 是否为 JSON
     if (req->contentType() != CT_APPLICATION_JSON)
@@ -119,16 +139,21 @@ void EuleraphHttpHandle::k_hop_neighbor_query(const HttpRequestPtr&             
 
     try
     {
-        // 3.解析json获取算法需要的参数
-        KHopQueryParams params = parse_khop_query_params(*jsonBody)
-
-            // 4. 业务逻辑：调用算法接口计算k度邻居总数
-            int count = AlgoInterface::get_k_hop_neighbor_count(const params);
-
-        // 5. 构造 JSON 响应
         Json::Value jsonResponse;
-        jsonResponse["code"] = 0;
-        jsonResponse["data"] = count;
+        // 3.解析json获取算法需要的参数
+        auto params = parse_khop_query_params(*jsonBody, reader);
+        if (params)
+        {
+            // 4. 业务逻辑：调用算法接口计算k度邻居总数
+            auto algo            = create_algo();
+            int  count           = algo->get_k_hop_neighbor_count(*params, reader);
+            jsonResponse["code"] = 0;
+            jsonResponse["data"] = count;
+        }
+        else
+        {
+            jsonResponse["code"] = -1;
+        }
 
         auto resp = HttpResponse::newHttpJsonResponse(jsonResponse);
         resp->setStatusCode(k200OK);
@@ -144,23 +169,29 @@ void EuleraphHttpHandle::k_hop_neighbor_query(const HttpRequestPtr&             
     }
 }
 
-CommonNeighborQueryParams parse_common_neighbor_query_params(const Json::Value& jsonBody)
+std::optional<CommonNeighborQueryParams> parse_common_neighbor_query_params(const Json::Value&               jsonBody,
+                                                                            std::shared_ptr<ReaderInterface> reader)
 {
     CommonNeighborQueryParams params;
-    // 1. 提取 node_ids
+    // 1. 提取可选 node_ids
     if (!jsonBody.isMember("node_ids") || !jsonBody["node_ids"].isArray())
     {
-        throw std::runtime_error("Missing or invalid 'node_ids' array");
+        spdlog::error("Missing or invalid 'node_ids' array");
+        return std::nullopt;
     }
 
     for (const auto& item : jsonBody["node_ids"])
     {
         if (!item.isString())
-            throw std::runtime_error("All items in 'node_ids' must be strings");
-        auto node_id = get_vertex_id(item.asString());
+        {
+            spdlog::error("All items in 'node_ids' must be strings");
+            return std::nullopt;
+        }
+        auto node_id = reader->get_vertex_id(0, item.asString());
         if (!node_id)
         {
-            throw std::runtime_error("Vertex not found: " + item.asString());
+            spdlog::error("Vertex not found:{}", item.asString());
+            return std::nullopt;
         }
         params.vertex_id_list.push_back(*node_id);
     }
@@ -168,18 +199,23 @@ CommonNeighborQueryParams parse_common_neighbor_query_params(const Json::Value& 
     // 2.提取可选 r_labels
     if (!jsonBody.isMember("r_labels") || !jsonBody["r_labels"].isArray())
     {
-        throw std::runtime_error("Missing or invalid 'r_labels' array");
+        spdlog::error("Missing or invalid 'r_labels' array");
+        return std::nullopt;
     }
-    if (!r_labels.is_null())
+    if (!jsonBody["r_labels"].empty())
     {
         for (const auto& item : jsonBody["r_labels"])
         {
             if (!item.isString())
-                throw std::runtime_error("All items in 'r_labels' must be strings");
-            auto relation_label_type_id = ReaderInterface::get_relation_type_id(item);
+            {
+                spdlog::error("All items in 'r_labels' must be strings");
+                return std::nullopt;
+            }
+            auto relation_label_type_id = reader->get_relation_type_id(item.asString());
             if (!relation_label_type_id)
             {
-                throw std::runtime_error("Relation label not found: " + item);
+                spdlog::error("Relation label not found:{}", item.asString());
+                return std::nullopt;
             }
             params.relation_label_type_id_list.push_back(*relation_label_type_id);
         }
@@ -188,7 +224,8 @@ CommonNeighborQueryParams parse_common_neighbor_query_params(const Json::Value& 
 }
 
 void EuleraphHttpHandle::common_neighbor_query(const HttpRequestPtr&                         req,
-                                               std::function<void(const HttpResponsePtr&)>&& callback)
+                                               std::function<void(const HttpResponsePtr&)>&& callback,
+                                               std::shared_ptr<ReaderInterface>              reader)
 {
     // 1. 检查 Content-Type 是否为 JSON
     if (req->contentType() != CT_APPLICATION_JSON)
@@ -215,16 +252,21 @@ void EuleraphHttpHandle::common_neighbor_query(const HttpRequestPtr&            
 
     try
     {
-        // 3.解析json获取算法需要的参数
-        CommonNeighborQueryParams params = parse_common_neighbor_query_params(*jsonBody)
-
-            // 4. 业务逻辑：调用算法接口计算k度邻居总数
-            int count = AlgoInterface::get_common_neighbor_count(const params);
-
-        // 5. 构造 JSON 响应
         Json::Value jsonResponse;
-        jsonResponse["code"] = 0;
-        jsonResponse["data"] = count;
+        // 3.解析json获取算法需要的参数
+        auto params = parse_common_neighbor_query_params(*jsonBody, reader);
+        if (params)
+        {
+            // 4. 业务逻辑：调用算法接口计算共同邻居总数
+            auto algo            = create_algo();
+            int  count           = algo->get_common_neighbor_count(*params, reader);
+            jsonResponse["code"] = 0;
+            jsonResponse["data"] = count;
+        }
+        else
+        {
+            jsonResponse["code"] = -1;
+        }
 
         auto resp = HttpResponse::newHttpJsonResponse(jsonResponse);
         resp->setStatusCode(k200OK);
