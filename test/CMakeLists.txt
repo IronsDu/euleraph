@@ -10,6 +10,7 @@ add_executable(
     "${PROJECT_SOURCE_DIR}/src/importer/importer.cpp" 
     "${PROJECT_SOURCE_DIR}/src/storage/writer_wiredtiger.cpp"
     "${PROJECT_SOURCE_DIR}/src/storage/reader_wiredtiger.cpp"
+    "src/storage/one_trx_reader_wiredtiger.cpp"
     "${PROJECT_SOURCE_DIR}/src/storage/wiredtiger_common.cpp"
 )
 
