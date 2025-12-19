@@ -18,6 +18,7 @@ class Importer
 public:
     void import_data(const std::string&     file_path,
                      int                    write_edge_thread_pool_concurrency_num,
+                     int                    batch_size,
                      WriterInterfaceFactory wirter_interface_generator,
                      ReaderInterfaceFactory reader_interface_factory);
 };
