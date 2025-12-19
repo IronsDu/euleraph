@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -8,6 +9,9 @@
 // 查询数据的抽象接口
 class ReaderInterface
 {
+public:
+    using Ptr = std::shared_ptr<ReaderInterface>;
+
 public:
     virtual ~ReaderInterface() = default;
 
@@ -30,6 +34,11 @@ public:
     // @param relation_type_id 关系类型ID
     // @return 关系类型名称，如果不存在则返回std::nullopt
     virtual std::optional<RelationType> get_relation_type_by_id(RelationTypeId relation_type_id) = 0;
+
+    // @brief 根据顶点唯一标识数组获取对用的顶点Id
+    // @param vertex_pks 顶点唯一标识数组
+    // @return 顶点ID数组, 如果某些标识不存在则其对应位置为std::nullopt
+    virtual std::vector<std::optional<VertexId>> get_vertex_ids(const std::vector<VertexPk>& vertex_pks) = 0;
 
     // @brief 根据标签类型ID和顶点唯一标识获取顶点ID
     // @param label_type_id 标签类型ID

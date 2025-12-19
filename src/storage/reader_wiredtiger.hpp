@@ -16,6 +16,7 @@ public:
     std::optional<RelationTypeId> get_relation_type_id(const RelationType& relation_type) override;
     std::optional<RelationType>   get_relation_type_by_id(RelationTypeId relation_type_id) override;
 
+    std::vector<std::optional<VertexId>> get_vertex_ids(const std::vector<VertexPk>& vertex_pks) override;
     // 目前label_type_id参数没有使用, 因为比赛数据里顶点标识是全局唯一的
     std::optional<VertexId> get_vertex_id(const LabelTypeId& label_type_id, const VertexPk& vertex_pk) override;
     std::optional<VertexPk> get_vertex_pk_by_id(VertexId vertex_id) override;

@@ -1,10 +1,14 @@
 #pragma once
 
+#include <memory>
 #include <mutex>
 #include <condition_variable>
 
 class WaitGroup
 {
+public:
+    using Ptr = std::shared_ptr<WaitGroup>;
+
 public:
     void add(int count = 1)
     {

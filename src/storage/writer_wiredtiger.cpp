@@ -133,38 +133,26 @@ VertexId WriterWiredTiger::write_vertex(const Vertex& vertice)
 {
     uint64_t record_number = 0;
 
-    while (true)
+    int        code   = 0;
+    WT_CURSOR* cursor = nullptr;
+    DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+
+    // TODO::测试config为`overwrite`的情况
+    code = session_->open_cursor(session_, "table:vertex", nullptr, "append", &cursor);
+    if (code != 0)
     {
-        int        code   = 0;
-        WT_CURSOR* cursor = nullptr;
-        DEFER(if (cursor != nullptr) { cursor->close(cursor); });
-
-        // 先查询
-        code = session_->open_cursor(session_, "index:vertex:vertex_ident_pk_index(id)", nullptr, nullptr, &cursor);
-        if (code != 0)
-        {
-            continue;
-        }
-        cursor->set_key(cursor, vertice.vertex_pk.c_str());
-        code = cursor->search(cursor);
-        if (code == 0)
-        {
-            code = cursor->get_value(cursor, &record_number);
-            if (code != 0)
-            {
-                continue;
-            }
-            break;
-        }
-
-        // TODO::测试config为`overwrite`的情况
-        code = session_->open_cursor(session_, "table:vertex", nullptr, "append", &cursor);
-        if (code != 0)
-        {
-            continue;
-        }
-        cursor->set_value(cursor, vertice.label_type_id, vertice.vertex_pk.c_str());
-        code = cursor->insert(cursor);
+        throw std::runtime_error("");
+    }
+    cursor->set_value(cursor, vertice.label_type_id, vertice.vertex_pk.c_str());
+    code = cursor->insert(cursor);
+    if (code != 0)
+    {
+        throw std::runtime_error("");
+    }
+    code = cursor->get_key(cursor, &record_number);
+    if (code != 0)
+    {
+        throw std::runtime_error("");
     }
 
     return record_number;
@@ -172,22 +160,56 @@ VertexId WriterWiredTiger::write_vertex(const Vertex& vertice)
 
 std::vector<VertexId> WriterWiredTiger::write_vertices(const std::vector<Vertex>& vertices)
 {
-    std::vector<VertexId> result;
-    result.reserve(vertices.size());
-
-    std::unordered_map<VertexPk, VertexId> cache;
-
-    for (const auto& vertex : vertices)
+    int code = 0;
+    code     = session_->begin_transaction(session_, NULL);
+    if (code != 0)
     {
-        if (const auto it = cache.find(vertex.vertex_pk); it != cache.end())
-        {
-            result.push_back(it->second);
-            continue;
-        }
-        VertexId vertex_id      = write_vertex(vertex);
-        cache[vertex.vertex_pk] = vertex_id;
-        result.push_back(vertex_id);
+        throw std::runtime_error("");
     }
+
+    std::vector<VertexId> result;
+    result.resize(vertices.size());
+
+    try
+    {
+        WT_CURSOR* cursor = nullptr;
+        DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+
+        // TODO::测试config为`overwrite`的情况
+        code = session_->open_cursor(session_, "table:vertex", nullptr, "append", &cursor);
+        if (code != 0)
+        {
+            throw std::runtime_error("");
+        }
+
+        const auto vertices_size = vertices.size();
+        for (int i = 0; i < vertices_size; i++)
+        {
+            const auto vertice = vertices[i];
+
+            cursor->set_value(cursor, vertice.label_type_id, vertice.vertex_pk.c_str());
+            code = cursor->insert(cursor);
+            if (code != 0)
+            {
+                throw std::runtime_error("");
+            }
+            uint64_t record_number = 0;
+            code                   = cursor->get_key(cursor, &record_number);
+            if (code != 0)
+            {
+                throw std::runtime_error("");
+            }
+
+            result[i] = record_number;
+        }
+    }
+    catch (...)
+    {
+        session_->rollback_transaction(session_, NULL);
+        throw std::runtime_error("");
+    }
+
+    code = session_->commit_transaction(session_, NULL);
 
     return result;
 }
@@ -215,7 +237,7 @@ void WriterWiredTiger::write_edge(const Edge& edge)
     key_item.data = static_cast<const void*>(&k);
     key_item.size = sizeof(k);
     cursor->set_key(cursor, &key_item);
-    cursor->set_value(cursor, &edge.end_label_type_id);
+    cursor->set_value(cursor, edge.end_label_type_id);
     code = cursor->insert(cursor);
     if (code != 0)
     {
@@ -227,9 +249,48 @@ void WriterWiredTiger::write_edges(const std::vector<Edge>& edges)
 {
     int code = 0;
     code     = session_->begin_transaction(session_, NULL);
-    for (const auto& edge : edges)
+    if (code != 0)
     {
-        write_edge(edge);
+        throw std::runtime_error("");
+    }
+
+    try
+    {
+        int        code   = 0;
+        WT_CURSOR* cursor = nullptr;
+        DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+
+        // TODO::测试config为`overwrite`的情况
+        code = session_->open_cursor(session_, "table:edge", nullptr, "append", &cursor);
+        if (code != 0)
+        {
+            throw std::runtime_error("");
+        }
+
+        WiredTigerEdgeStorageKey k;
+        WT_ITEM                  key_item;
+        key_item.size = sizeof(k);
+        for (const auto& edge : edges)
+        {
+            k.start_vertex_id  = edge.start_vertex_id;
+            k.direction        = edge.direction;
+            k.relation_type_id = edge.relation_type_id;
+            k.end_vertex_id    = edge.end_vertex_id;
+
+            key_item.data = static_cast<const void*>(&k);
+            cursor->set_key(cursor, &key_item);
+            cursor->set_value(cursor, edge.end_label_type_id);
+            code = cursor->insert(cursor);
+            if (code != 0)
+            {
+                throw std::runtime_error("");
+            }
+        }
+    }
+    catch (...)
+    {
+        session_->rollback_transaction(session_, NULL);
+        throw std::runtime_error("");
     }
     code = session_->commit_transaction(session_, NULL);
     return;
