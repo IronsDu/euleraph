@@ -1,6 +1,7 @@
 #include "wiredtiger_common.hpp"
 
 #include <filesystem>
+#include <spdlog/spdlog.h>
 
 #include "wiredtiger.h"
 
@@ -16,6 +17,8 @@ static std::string make_table_name(const std::string& base_name)
 
 void wiredtiger_initialize_databse_schema(std::string database_name)
 {
+    spdlog::info("initialize database:{}", database_name);
+
     WT_CONNECTION* conn;
 
     std::error_code ec;
@@ -69,4 +72,6 @@ void wiredtiger_initialize_databse_schema(std::string database_name)
                            "key_format=u,value_format=Q,columns=(edge_key,end_label_type_id)");
 
     conn->close(conn, nullptr);
+
+    spdlog::info("complete initialize database:{}", database_name);
 }

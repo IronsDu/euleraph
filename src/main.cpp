@@ -15,15 +15,7 @@
 
 using namespace drogon;
 
-struct cli_args
-{
-    std::string path;
-    int         batch_size;
-    int         concurrency;
-    int         port;
-};
-
-constexpr int DEFAULT_BATCH_SIZE = 100000;
+constexpr int DEFAULT_BATCH_SIZE = 1000;
 constexpr int PORT               = 8200;
 
 static int DefaultConcurrency()
@@ -32,62 +24,93 @@ static int DefaultConcurrency()
     return (n == 0u) ? 1 : static_cast<int>(n);
 }
 
-bool parse_cli_args(int argc, char** argv, cli_args& out_args) {
-    // 附默认值
-    out_args.batch_size   = DEFAULT_BATCH_SIZE;
-    out_args.concurrency  = DefaultConcurrency();
-    out_args.port         = PORT;
+struct cli_args
+{
+    cli_args()
+    {
+        batch_size  = DEFAULT_BATCH_SIZE;
+        concurrency = DefaultConcurrency();
+        port        = PORT;
+    }
 
+    // 数据库目录
+    std::string database_dir;
+    // excel 文件路径
+    std::string data_path;
+    int         batch_size;
+    int         concurrency;
+    int         port;
+    bool        need_import = false;
+};
+
+static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
+{
     args::ArgumentParser parser("This is a euleraph program.", "This goes after the options.");
 
     args::HelpFlag help(parser, "help", "Show this help menu", {'h', "help"});
 
-    args::ValueFlag<std::string> path(parser, "data_path", "input data path (required unless -h)",
-                                      {'d', "data_path"});
+    args::ValueFlag<std::string> database_dir(parser,
+                                              "database_dir",
+                                              "input excel data path (required unless -h)",
+                                              {"database_dir"},
+                                              args::Options::Required);
 
-    args::ValueFlag<int> batch_size(parser, "batch_size", "batch size (optional)",
-                                    {'b', "batch_size"});
-    args::ValueFlag<int> concurrency(parser, "concurrency", "Concurrency (optional)",
-                                     {'c', "concurrency"});
-    args::ValueFlag<int> port(parser, "port", "Port (optional)",
-                              {'p', "port"});
+    args::ValueFlag<std::string> data_path(parser,
+                                           "data_path",
+                                           "input excel data path (required when need_import is true)",
+                                           {"data_path"});
+    args::Flag need_import(parser, "need_import", "whether need import data (optional)", {"need_import"});
 
-    try {
+    args::ValueFlag<int> batch_size(parser, "batch_size", "batch size (optional)", {"batch_size"});
+    args::ValueFlag<int> concurrency(parser, "concurrency", "Concurrency (optional)", {"concurrency"});
+    args::ValueFlag<int> port(parser, "port", "Port (optional)", {"port"});
+
+    try
+    {
         parser.ParseCLI(argc, argv);
 
-        if (help) {
-            std::cout << parser << std::endl;
-            return false;
-        }
-
-        if (!path) {
-            std::cerr << "Error: 必须指定路径 (-d/--data_path) 或者使用-h查看帮助\n\n";
-            // std::cerr << parser << std::endl;
-            return false;
-        }
-
         // 必填赋值
-        out_args.path = args::get(path);
+        out_args.database_dir = args::get(database_dir);
 
         // 可选覆盖默认值
-        if (batch_size)  out_args.batch_size  = args::get(batch_size);
-        if (concurrency) out_args.concurrency = args::get(concurrency);
-        if (port)        out_args.port        = args::get(port);
+        if (batch_size)
+            out_args.batch_size = args::get(batch_size);
+        if (concurrency)
+            out_args.concurrency = args::get(concurrency);
+        if (port)
+            out_args.port = args::get(port);
+        if (need_import)
+        {
+            out_args.need_import = true;
+            out_args.data_path   = args::get(data_path);
+            if (out_args.data_path.empty())
+            {
+                throw args::ParseError("data_path must be provided when need_import is true.");
+            }
+        }
+
+        if (out_args.batch_size <= 0 || out_args.concurrency <= 0 || out_args.port <= 0)
+        {
+            throw args::ParseError("batch_size, concurrency and port must be positive integers.");
+        }
 
         return true;
     }
-    catch (const args::Help&) {
+    catch (const args::Help&)
+    {
         std::cout << parser << std::endl;
         return false;
     }
-    catch (const args::ParseError& e) {
-        std::cerr << "ParseError: " << e.what() << "\n\n";
-        // std::cerr << parser << std::endl;
+    catch (const args::ParseError& e)
+    {
+        std::cerr << "ParseError: " << e.what() << std::endl;
+        std::cerr << parser << std::endl;
         return false;
     }
-    catch (const args::ValidationError& e) {
-        std::cerr << "ValidationError: " << e.what() << "\n\n";
-        // std::cerr << parser << std::endl;
+    catch (const args::ValidationError& e)
+    {
+        std::cerr << "ValidationError: " << e.what() << std::endl;
+        std::cerr << parser << std::endl;
         return false;
     }
 }
@@ -127,75 +150,48 @@ ___________     .__                             .__
 /_______  /____/|____/\___  >__|  (____  /   __/|___|  /
         \/                \/           \/|__|        \/ 
 )";
-
     play_neon_banner(logo);
-
-    wiredtiger_initialize_databse_schema("graph_database");
-
-    if (wiredtiger_open("graph_database", nullptr, "create", &conn) != 0)
-    {
-        std::cerr << "open failed" << std::endl;
-    }
-
-    auto thread_pool = std::make_shared<ThreadPool>(std::thread::hardware_concurrency() * 2);
 
     // 解析用户参数
     cli_args param;
-
     if (!parse_cli_args(argc, argv, param))
     {
-        return 0;
+        return 1;
     }
 
-    if (true)
+    wiredtiger_initialize_databse_schema(param.database_dir);
+    if (wiredtiger_open(param.database_dir.c_str(), nullptr, "create", &conn) != 0)
+    {
+        spdlog::error("Failed to open WiredTiger database at {}", param.database_dir);
+        return 1;
+    }
+
+    auto thread_pool = std::make_shared<ThreadPool>(param.concurrency);
+
+    if (param.need_import)
     {
         try
         {
             Importer importer;
-            importer.import_data(param.path,
-                                 param.concurrency,
-                                 param.batch_size,
-                                 make_writer,
-                                 make_reader);
-
-            // TODO::导入后测试一下
-            if (true)
-            {
-                auto reader          = std::make_shared<ReaderWiredTiger>(conn);
-                auto label_type_id   = reader->get_label_type_id("User");
-                auto start_vertex_id = reader->get_vertex_id(label_type_id.value(), "node_0607477");
-                auto neighbors_edges = reader->get_neighbors_by_start_vertex(start_vertex_id.value(),
-                                                                             label_type_id.value(),
-                                                                             EdgeDirection::OUTGOING,
-                                                                             std::nullopt);
-                std::cout << "neighbors_edges size:" << neighbors_edges.size() << std::endl;
-                for (const auto& edge : neighbors_edges)
-                {
-                    spdlog::info("======================");
-                    auto start_label_type = reader->get_label_type_by_id(edge.start_label_type_id);
-                    auto end_label_type   = reader->get_label_type_by_id(edge.end_label_type_id);
-
-                    auto relation_type = reader->get_relation_type_by_id(edge.relation_type_id);
-
-                    auto start_vertex_pk = reader->get_vertex_pk_by_id(edge.start_vertex_id);
-                    auto end_vertex_pk   = reader->get_vertex_pk_by_id(edge.end_vertex_id);
-
-                    spdlog::info("{}:{} -> [{}] -> {}:{}",
-                                 start_vertex_pk.value(),
-                                 start_label_type.value(),
-                                 relation_type.value(),
-                                 end_vertex_pk.value(),
-                                 end_label_type.value());
-                }
-            }
+            importer.import_data(param.data_path, param.concurrency, param.batch_size, make_writer, make_reader);
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Data import failed: " << e.what() << std::endl;
+            spdlog::error("Data import failed: {}", e.what());
+            return 1;
         }
     }
 
-    app().setLogPath("./").setLogLevel(trantor::Logger::kWarn).addListener("0.0.0.0", 10020).setThreadNum(16);
+    spdlog::info("Starting Euleraph server on port {}", param.port);
+
+    const std::string web_dir = "./web";
+    std::filesystem::create_directories(web_dir);
+
+    app()
+        .setLogPath(web_dir)
+        .setLogLevel(trantor::Logger::kWarn)
+        .addListener("0.0.0.0", param.port)
+        .setThreadNum(std::thread::hardware_concurrency());
     app().registerHandler("/ping",
                           [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
                               EuleraphHttpHandle::ping(req, std::move(callback));
@@ -213,7 +209,7 @@ ___________     .__                             .__
                               EuleraphHttpHandle::common_neighbor_query(req, std::move(callback), reader);
                           },
                           {Post});
-
+    app().setUploadPath(web_dir);
     app().run();
 
     return 0;
