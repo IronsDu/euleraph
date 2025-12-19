@@ -1,8 +1,10 @@
 #include "reader_wiredtiger.hpp"
 
+#include <string.h>
+#include <spdlog/spdlog.h>
+
 #include "storage/wiredtiger_common.hpp"
 #include "utils/defer.hpp"
-#include <string.h>
 
 ReaderWiredTiger::ReaderWiredTiger(WT_CONNECTION* conn)
 {
@@ -151,6 +153,51 @@ std::optional<RelationType> ReaderWiredTiger::get_relation_type_by_id(RelationTy
     return RelationType(relation_type_name);
 }
 
+std::vector<std::optional<VertexId>> ReaderWiredTiger::get_vertex_ids(const std::vector<VertexPk>& vertex_pks)
+{
+    std::vector<std::optional<VertexId>> result;
+    const auto                           vertex_pks_size = vertex_pks.size();
+    result.resize(vertex_pks_size);
+
+    int code = 0;
+    code     = session_->begin_transaction(session_, NULL);
+    if (code != 0)
+    {
+        return result;
+    }
+    DEFER(session_->rollback_transaction(session_, NULL));
+
+    WT_CURSOR* cursor = nullptr;
+    DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+    code = session_->open_cursor(session_, "index:vertex:vertex_ident_pk_index(id)", nullptr, nullptr, &cursor);
+    if (code != 0)
+    {
+        return result;
+    }
+
+    for (int i = 0; i < vertex_pks_size; i++)
+    {
+        const auto& vertex_pk = vertex_pks[i];
+
+        cursor->set_key(cursor, vertex_pk.c_str());
+        code = cursor->search(cursor);
+        if (code != 0)
+        {
+            continue;
+        }
+
+        uint64_t record_number = 0;
+        code                   = cursor->get_value(cursor, &record_number);
+        if (code != 0)
+        {
+            continue;
+        }
+        result[i] = record_number;
+    }
+
+    return result;
+}
+
 std::optional<VertexId> ReaderWiredTiger::get_vertex_id(const LabelTypeId& label_type_id, const VertexPk& vertex_pk)
 {
     int        code   = 0;
@@ -259,11 +306,64 @@ std::vector<Edge> ReaderWiredTiger::get_neighbors_by_start_vertex(const VertexId
 
     std::vector<Edge> result_edges;
 
+    spdlog::info("exact:{}", exact);
     if (exact == 0)
     {
+        WT_ITEM edge_key_item;
+        code = cursor->get_key(cursor, &edge_key_item);
+        LabelTypeId* end_label_type_id; // 终点标签类型ID
+        code = cursor->get_value(cursor, &end_label_type_id);
+
+        const auto* edge_key = reinterpret_cast<const WiredTigerEdgeStorageKey*>(edge_key_item.data);
+
+        Edge edge;
+        edge.relation_type_id    = edge_key->relation_type_id;
+        edge.start_label_type_id = start_label_type_id;
+        edge.start_vertex_id     = edge_key->start_vertex_id;
+        edge.direction           = edge_key->direction;
+        edge.end_vertex_id       = edge_key->end_vertex_id;
+        edge.end_label_type_id   = *end_label_type_id;
+
+        result_edges.push_back(edge);
     }
     else if (exact < 0)
     {
+        // 向后遍历所有前缀匹配的边
+        while (cursor->next(cursor) == 0)
+        {
+            WT_ITEM edge_key_item;
+            code = cursor->get_key(cursor, &edge_key_item);
+            if (code != 0)
+            {
+                break;
+            }
+
+            const auto* edge_key = reinterpret_cast<const WiredTigerEdgeStorageKey*>(edge_key_item.data);
+            if (edge_key->start_vertex_id != start_vertex_id || edge_key->direction != direction ||
+                (need_filter_relation_type_id && edge_key->relation_type_id != filter_relation_type_id))
+            {
+                spdlog::error("break, result_edges size:{}", result_edges.size());
+                break;
+            }
+
+            LabelTypeId end_label_type_id; // 终点标签类型ID
+            code = cursor->get_value(cursor, &end_label_type_id);
+            if (code != 0)
+            {
+                spdlog::error("get value failed, code:{}, result_edges size:%d", code, result_edges.size());
+                break;
+            }
+
+            Edge edge;
+            edge.relation_type_id    = edge_key->relation_type_id;
+            edge.start_label_type_id = start_label_type_id;
+            edge.start_vertex_id     = edge_key->start_vertex_id;
+            edge.direction           = edge_key->direction;
+            edge.end_vertex_id       = edge_key->end_vertex_id;
+            edge.end_label_type_id   = end_label_type_id;
+
+            result_edges.push_back(edge);
+        };
     }
     else
     {
@@ -272,16 +372,22 @@ std::vector<Edge> ReaderWiredTiger::get_neighbors_by_start_vertex(const VertexId
         {
             WT_ITEM edge_key_item;
             cursor->get_key(cursor, &edge_key_item);
-            LabelTypeId* end_label_type_id; // 终点标签类型ID
-            if (cursor->get_value(cursor, &end_label_type_id) != 0)
+            LabelTypeId end_label_type_id; // 终点标签类型ID
+            code = cursor->get_value(cursor, &end_label_type_id);
+            if (code != 0)
             {
+                spdlog::error("get value failed, code:{}, result_edges size:%d", code, result_edges.size());
                 break;
             }
 
             const auto* edge_key = reinterpret_cast<const WiredTigerEdgeStorageKey*>(edge_key_item.data);
             if (edge_key->start_vertex_id != start_vertex_id || edge_key->direction != direction ||
                 (need_filter_relation_type_id && edge_key->relation_type_id != filter_relation_type_id))
+            {
+
+                spdlog::error("break, result_edges size:{}", result_edges.size());
                 break;
+            }
 
             Edge edge;
             edge.relation_type_id    = edge_key->relation_type_id;
@@ -289,7 +395,7 @@ std::vector<Edge> ReaderWiredTiger::get_neighbors_by_start_vertex(const VertexId
             edge.start_vertex_id     = edge_key->start_vertex_id;
             edge.direction           = edge_key->direction;
             edge.end_vertex_id       = edge_key->end_vertex_id;
-            edge.end_label_type_id   = *end_label_type_id;
+            edge.end_label_type_id   = end_label_type_id;
 
             result_edges.push_back(edge);
         } while (cursor->next(cursor) == 0);

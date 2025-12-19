@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 #include "interface/types/types.hpp"
 
@@ -8,6 +9,8 @@
 class WriterInterface
 {
 public:
+    using Ptr = std::shared_ptr<WriterInterface>;
+
     // 定义写入接口所需的顶点结构体
     struct Vertex
     {
