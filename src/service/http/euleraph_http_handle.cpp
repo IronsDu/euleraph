@@ -15,6 +15,132 @@ void EuleraphHttpHandle::ping(const HttpRequestPtr& req, drogon::AdviceCallback&
     callback(resp);
 }
 
+// request json:
+// "start_vertex_pk": 起点的标识, 必选项.
+// "direction": 方向(0:出, 1:出, 2:双向, 非必填. 未指定时为默认值:2.
+// "relation": 关系类型的名称, 非必填, 此时表示不过滤关系类型.
+void EuleraphHttpHandle::get_one_hop_neighbors(const HttpRequestPtr&                         req,
+                                               std::function<void(const HttpResponsePtr&)>&& callback,
+                                               std::shared_ptr<ReaderInterface>              reader)
+{
+    const auto reply_error_msg = [&](std::string error_msg, int code = 500) {
+        spdlog::error(error_msg);
+
+        Json::Value json;
+        json["code"]    = code;
+        json["message"] = error_msg;
+        callback(HttpResponse::newHttpJsonResponse(json));
+    };
+
+    const auto& jsonBody              = req->getJsonObject();
+    const auto  start_vertex_pk_param = (*jsonBody)["start_vertex_pk"];
+    if (!start_vertex_pk_param)
+    {
+        reply_error_msg("param:start_vertex_pk is missing", 400);
+        return;
+    }
+
+    std::string   start_vertex_pk = start_vertex_pk_param.asString();
+    EdgeDirection direction       = EdgeDirection::UNDIRECTED;
+    const auto    direction_param = (*jsonBody)["direction"];
+    if (direction_param)
+    {
+        const auto direction_value = direction_param.asInt();
+        if (direction_value != static_cast<int>(EdgeDirection::OUTGOING) &&
+            direction_value != static_cast<int>(EdgeDirection::INCOMING) &&
+            direction_value != static_cast<int>(EdgeDirection::UNDIRECTED))
+        {
+            reply_error_msg("direction is incorrect", 400);
+            return;
+        }
+        direction = static_cast<EdgeDirection>(direction_value);
+    }
+
+    std::optional<RelationTypeId> relation_type_id;
+    const auto                    relation_param = (*jsonBody)["relation"];
+    if (relation_param)
+    {
+        const std::string relation_name = relation_param.asString();
+        if (!relation_name.empty())
+        {
+            relation_type_id = reader->get_relation_type_id(relation_name);
+            if (!relation_type_id)
+            {
+                reply_error_msg(fmt::format("not found relation:{}", relation_name));
+                return;
+            }
+        }
+    }
+
+    // TODO::label type id无需指定
+    const auto dummy_start_label_id = 1;
+    auto       start_vertex_id      = reader->get_vertex_id(dummy_start_label_id, start_vertex_pk);
+    if (!start_vertex_id)
+    {
+        reply_error_msg(fmt::format("not found vertex:{}", start_vertex_pk));
+        return;
+    }
+
+    Json::Value data_json;
+
+    // 实际需要查询的方向数组
+    const std::vector<EdgeDirection> real_direction_array = [&]() -> std::vector<EdgeDirection> {
+        switch (direction)
+        {
+        case EdgeDirection::OUTGOING:
+            return {EdgeDirection::OUTGOING};
+        case EdgeDirection::INCOMING:
+            return {EdgeDirection::INCOMING};
+        case EdgeDirection::UNDIRECTED:
+            return {EdgeDirection::OUTGOING, EdgeDirection::INCOMING};
+        default:
+            return {};
+        }
+    }();
+
+    for (const auto& direction : real_direction_array)
+    {
+        const auto neighbors_edges = reader->get_neighbors_by_start_vertex(start_vertex_id.value(),
+                                                                           dummy_start_label_id,
+                                                                           static_cast<EdgeDirection>(direction),
+                                                                           relation_type_id);
+
+        for (const auto& edge : neighbors_edges)
+        {
+            auto start_label_type = reader->get_label_type_by_id(edge.start_label_type_id);
+            auto end_label_type   = reader->get_label_type_by_id(edge.end_label_type_id);
+
+            auto relation_type = reader->get_relation_type_by_id(edge.relation_type_id);
+
+            auto start_vertex_pk = reader->get_vertex_pk_by_id(edge.start_vertex_id);
+            auto end_vertex_pk   = reader->get_vertex_pk_by_id(edge.end_vertex_id);
+
+            if (edge.direction == EdgeDirection::OUTGOING)
+            {
+                data_json.append(fmt::format("{}:{} -> [{}] -> {}:{}",
+                                             start_vertex_pk.value(),
+                                             start_label_type.value(),
+                                             relation_type.value(),
+                                             end_vertex_pk.value(),
+                                             end_label_type.value()));
+            }
+            else
+            {
+                data_json.append(fmt::format("{}:{} -> [{}] -> {}:{}",
+                                             end_vertex_pk.value(),
+                                             end_label_type.value(),
+                                             relation_type.value(),
+                                             start_vertex_pk.value(),
+                                             start_label_type.value()));
+            }
+        }
+    }
+
+    Json::Value resp_json;
+    resp_json["data"] = data_json;
+    callback(HttpResponse::newHttpJsonResponse(resp_json));
+}
+
 std::optional<KHopQueryParams> parse_khop_query_params(const Json::Value&               jsonBody,
                                                        std::shared_ptr<ReaderInterface> reader)
 {
