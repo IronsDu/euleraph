@@ -115,6 +115,18 @@ ___________     .__                             .__
                               EuleraphHttpHandle::ping(req, std::move(callback));
                           },
                           {Get});
+    app().registerHandler("/k_hop_neighbor_query",
+                          [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+                              auto reader = std::make_shared<ReaderWiredTiger>(conn);
+                              EuleraphHttpHandle::k_hop_neighbor_query(req, std::move(callback), reader);
+                          },
+                          {Post});
+    app().registerHandler("/common_neighbor_query",
+                          [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+                              auto reader = std::make_shared<ReaderWiredTiger>(conn);
+                              EuleraphHttpHandle::common_neighbor_query(req, std::move(callback), reader);
+                          },
+                          {Post});
 
     app().run();
 
