@@ -209,6 +209,14 @@ ___________     .__                             .__
                               EuleraphHttpHandle::common_neighbor_query(req, std::move(callback), reader);
                           },
                           {Post});
+
+    // 获取指定顶点以及方向的一度邻居详细信息
+    app().registerHandler("/get_one_hop_neighbors",
+                          [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+                              auto reader = std::make_shared<ReaderWiredTiger>(conn);
+                              EuleraphHttpHandle::get_one_hop_neighbors(req, std::move(callback), reader);
+                          },
+                          {Post});
     app().setUploadPath(web_dir);
     app().run();
 
