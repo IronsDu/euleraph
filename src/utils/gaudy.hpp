@@ -95,6 +95,4 @@ static void play_neon_banner(const std::string logo)
 
     // 恢复光标
     std::cout << "\033[?25h" << std::endl;
-
-    std::cout << "\n[系统初始化完毕...]\n" << std::endl;
 }

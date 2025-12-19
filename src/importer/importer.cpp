@@ -207,6 +207,8 @@ void Importer::import_data(const std::string&     file_path,
         }
     };
 
+    spdlog::info("start import edges from excel: {}", file_path);
+
     xlnt::workbook wb;
     wb.load(file_path);
     auto ws        = wb.active_sheet();
@@ -273,5 +275,5 @@ void Importer::import_data(const std::string&     file_path,
     auto t_end   = std::chrono::steady_clock::now();
     auto seconds = std::chrono::duration_cast<std::chrono::seconds>(t_end - t_begin).count();
 
-    std::cout << "完成启动，" << seconds << "s\n";
+    spdlog::info("complete import, cost:{} seconds", seconds);
 }
