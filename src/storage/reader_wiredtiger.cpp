@@ -21,34 +21,30 @@ std::optional<LabelTypeId> ReaderWiredTiger::get_label_type_id(const LabelType& 
 
     uint64_t record_number = 0;
 
-    while (true)
+    int        code   = 0;
+    WT_CURSOR* cursor = nullptr;
+    DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+
+    code = session_->open_cursor(session_, "index:label_type:name_pk_index(id)", nullptr, nullptr, &cursor);
+    if (code != 0)
     {
-        int        code   = 0;
-        WT_CURSOR* cursor = nullptr;
-        DEFER(if (cursor != nullptr) { cursor->close(cursor); });
-
-        code = session_->open_cursor(session_, "index:label_type:name_pk_index(id)", nullptr, nullptr, &cursor);
-        if (code != 0)
-        {
-            continue;
-        }
-
-        cursor->set_key(cursor, label_type.c_str());
-        code = cursor->search(cursor);
-        if (code != 0)
-        {
-            continue;
-        }
-
-        code = cursor->get_value(cursor, &record_number);
-        if (code != 0)
-        {
-            continue;
-        }
-
-        label_type_cache_[label_type] = LabelTypeId(record_number);
-        break;
+        return std::nullopt;
     }
+
+    cursor->set_key(cursor, label_type.c_str());
+    code = cursor->search(cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    code = cursor->get_value(cursor, &record_number);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    label_type_cache_[label_type] = LabelTypeId(record_number);
 
     return record_number;
 }
@@ -92,34 +88,30 @@ std::optional<RelationTypeId> ReaderWiredTiger::get_relation_type_id(const Relat
 
     uint64_t record_number = 0;
 
-    while (true)
+    int        code   = 0;
+    WT_CURSOR* cursor = nullptr;
+    DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+
+    code = session_->open_cursor(session_, "index:relation_type:name_pk_index(id)", nullptr, nullptr, &cursor);
+    if (code != 0)
     {
-        int        code   = 0;
-        WT_CURSOR* cursor = nullptr;
-        DEFER(if (cursor != nullptr) { cursor->close(cursor); });
-
-        code = session_->open_cursor(session_, "index:relation_type:name_pk_index(id)", nullptr, nullptr, &cursor);
-        if (code != 0)
-        {
-            continue;
-        }
-
-        cursor->set_key(cursor, relation_type.c_str());
-        code = cursor->search(cursor);
-        if (code != 0)
-        {
-            continue;
-        }
-
-        code = cursor->get_value(cursor, &record_number);
-        if (code != 0)
-        {
-            continue;
-        }
-
-        relation_type_cache_[relation_type] = RelationTypeId(record_number);
-        break;
+        return std::nullopt;
     }
+
+    cursor->set_key(cursor, relation_type.c_str());
+    code = cursor->search(cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    code = cursor->get_value(cursor, &record_number);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    relation_type_cache_[relation_type] = RelationTypeId(record_number);
 
     return record_number;
 }
@@ -306,7 +298,6 @@ std::vector<Edge> ReaderWiredTiger::get_neighbors_by_start_vertex(const VertexId
 
     std::vector<Edge> result_edges;
 
-    spdlog::info("exact:{}", exact);
     if (exact == 0)
     {
         WT_ITEM edge_key_item;
@@ -342,7 +333,6 @@ std::vector<Edge> ReaderWiredTiger::get_neighbors_by_start_vertex(const VertexId
             if (edge_key->start_vertex_id != start_vertex_id || edge_key->direction != direction ||
                 (need_filter_relation_type_id && edge_key->relation_type_id != filter_relation_type_id))
             {
-                spdlog::error("break, result_edges size:{}", result_edges.size());
                 break;
             }
 
@@ -384,8 +374,6 @@ std::vector<Edge> ReaderWiredTiger::get_neighbors_by_start_vertex(const VertexId
             if (edge_key->start_vertex_id != start_vertex_id || edge_key->direction != direction ||
                 (need_filter_relation_type_id && edge_key->relation_type_id != filter_relation_type_id))
             {
-
-                spdlog::error("break, result_edges size:{}", result_edges.size());
                 break;
             }
 

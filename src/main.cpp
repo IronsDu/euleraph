@@ -7,6 +7,7 @@
 #include "importer/importer.hpp"
 #include "service/http/euleraph_http_handle.hpp"
 #include "storage/reader_wiredtiger.hpp"
+#include "storage/one_trx_reader_wiredtiger.hpp"
 #include "storage/writer_wiredtiger.hpp"
 #include "storage/wiredtiger_common.hpp"
 #include "utils/thread_pool.hpp"
@@ -213,7 +214,7 @@ ___________     .__                             .__
     // 获取指定顶点以及方向的一度邻居详细信息
     app().registerHandler("/get_one_hop_neighbors",
                           [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-                              auto reader = std::make_shared<ReaderWiredTiger>(conn);
+                              auto reader = std::make_shared<OneTrxReaderWiredTiger>(conn);
                               EuleraphHttpHandle::get_one_hop_neighbors(req, std::move(callback), reader);
                           },
                           {Post});

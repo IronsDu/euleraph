@@ -25,6 +25,7 @@ add_executable(euleraph src/main.cpp
 "src/importer/importer.cpp"
 "src/storage/writer_wiredtiger.cpp"
 "src/storage/reader_wiredtiger.cpp"
+"src/storage/one_trx_reader_wiredtiger.cpp"
 "src/storage/wiredtiger_common.cpp"
 "src/algo/algo_Implementation.cpp")
 
