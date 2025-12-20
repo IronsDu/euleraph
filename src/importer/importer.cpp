@@ -1,6 +1,7 @@
 #include "importer/importer.hpp"
 
-#include <xlnt/xlnt.hpp>
+#include <filesystem>
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -9,12 +10,15 @@
 #include <vector>
 #include <unordered_set>
 #include <spdlog/spdlog.h>
+#include <xlnt/xlnt.hpp>
 
 #include "interface/storage/reader.hpp"
 #include "interface/storage/writer.hpp"
 
 #include "utils/defer.hpp"
 #include "utils/wait_group.hpp"
+#include "utils/csv.h"
+#include "utils/gaudy.hpp"
 
 using namespace std;
 
@@ -30,7 +34,7 @@ struct EdgeRowData
     LabelTypeId    end_label_type_id;
 };
 
-static void import_edges_first_step(std::vector<EdgeRowData>&                  excel_edges,
+static void import_edges_first_step(std::vector<EdgeRowData>&                  file_edges,
                                     WriterInterfaceFactory                     writer_interface_generator,
                                     ReaderInterfaceFactory                     reader_interface_factory,
                                     std::shared_ptr<std::counting_semaphore<>> control_write_first_step,
@@ -40,7 +44,7 @@ static void import_edges_first_step(std::vector<EdgeRowData>&                  e
                                     std::shared_ptr<std::atomic_uint64_t>      writed_edges_num)
 {
     const auto t_begin = std::chrono::steady_clock::now();
-    // spdlog::info("start once write edges resolve vertex, size:{}", excel_edges.size());
+    // spdlog::info("start once write edges resolve vertex, size:{}", file_edges.size());
     auto writer = writer_interface_generator();
     auto reader = reader_interface_factory();
 
@@ -49,7 +53,7 @@ static void import_edges_first_step(std::vector<EdgeRowData>&                  e
     std::vector<LabelTypeId> pk_label_type_ids;
     {
         std::unordered_set<VertexPk> pk_map;
-        for (auto& edge_source_data : excel_edges)
+        for (auto& edge_source_data : file_edges)
         {
             if (!pk_map.contains(edge_source_data.start_pk))
             {
@@ -97,13 +101,13 @@ static void import_edges_first_step(std::vector<EdgeRowData>&                  e
         catch (const std::runtime_error& e)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            spdlog::error("batch write_vertices catch exception:{}, will retry", e.what());
+            spdlog::debug("batch write_vertices catch exception:{}, will retry", e.what());
             have_retry = true;
             continue;
         }
         if (have_retry)
         {
-            spdlog::info("retry write_vertices success");
+            spdlog::debug("retry write_vertices success");
         }
         break;
     }
@@ -120,8 +124,8 @@ static void import_edges_first_step(std::vector<EdgeRowData>&                  e
     }
 
     std::vector<WriterInterface::Edge> edges;
-    edges.reserve(excel_edges.size());
-    for (auto& edge_source_data : excel_edges)
+    edges.reserve(file_edges.size() * 2);
+    for (auto& edge_source_data : file_edges)
     {
         const auto start_vertex_id = pk_to_ids[edge_source_data.start_pk];
         const auto end_vertex_id   = pk_to_ids[edge_source_data.end_pk];
@@ -143,7 +147,9 @@ static void import_edges_first_step(std::vector<EdgeRowData>&                  e
 
     auto t_end        = std::chrono::steady_clock::now();
     auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_begin).count();
-    spdlog::info("first step cost {} ms", milliseconds);
+    spdlog::debug("first step cost {} ms", milliseconds);
+
+    const auto file_edge_num = file_edges.size();
 
     control_real_write_edges->acquire();
     async_task_wg->add();
@@ -162,26 +168,54 @@ static void import_edges_first_step(std::vector<EdgeRowData>&                  e
             }
             catch (const std::runtime_error& e)
             {
-                spdlog::error("batch write_edges catch exception:{}, will retry", e.what());
+                spdlog::debug("batch write_edges catch exception:{}, will retry", e.what());
                 have_retry = true;
                 continue;
             }
             if (have_retry)
             {
-                spdlog::info("retry write_edges success");
+                spdlog::debug("retry write_edges success");
             }
             break;
         }
 
         auto t_end        = std::chrono::steady_clock::now();
         auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_begin).count();
-        spdlog::info("real write edges step cost {} ms", milliseconds);
+        spdlog::debug("real write edges step cost {} ms", milliseconds);
 
-        writed_edges_num->fetch_add(edges.size());
+        writed_edges_num->fetch_add(file_edge_num);
     });
 
-    // spdlog::info("end once write edges resole vertex, size:{}", excel_edges.size());
+    // spdlog::info("end once write edges resole vertex, size:{}", file_edges.size());
 };
+
+namespace fs = std::filesystem;
+enum class FileType
+{
+    Excel,
+    CSV,
+    Unknown
+};
+
+static FileType get_file_type(const std::string& filename)
+{
+    fs::path filePath(filename);
+
+    std::string ext = filePath.extension().string();
+
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (ext == ".xlsx" || ext == ".xls")
+    {
+        return FileType::Excel;
+    }
+    else if (ext == ".csv")
+    {
+        return FileType::CSV;
+    }
+
+    return FileType::Unknown;
+}
 
 void Importer::import_data(const std::string&     file_path,
                            int                    write_edge_thread_pool_concurrency_num,
@@ -193,18 +227,6 @@ void Importer::import_data(const std::string&     file_path,
 
     auto             writed_edges_num = std::make_shared<std::atomic_uint64_t>(0);
     std::atomic_bool writed_completed = false;
-
-    // 打印当前写入进度
-    WaitGroup wait_output_thread;
-    wait_output_thread.add();
-    std::thread([&]() {
-        DEFER(wait_output_thread.done());
-        while (!writed_completed.load())
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            spdlog::warn("current write edges num: {}", writed_edges_num->load());
-        }
-    }).detach();
 
     // 写入的第一阶段任务的线程池，必须为一个工作线程
     // 它负责解决这一批边中的所有点
@@ -246,59 +268,135 @@ void Importer::import_data(const std::string&     file_path,
         }
     };
 
-    spdlog::info("start import edges from excel: {}", file_path);
+    spdlog::info("start import edges from file: {}", file_path);
 
     auto writer = wirter_interface_generator();
 
-    int                             current_excel_row_num = 0;
-    auto                            cons_edge_begin       = std::chrono::steady_clock::now();
-    bool                            first_row             = true;
-    xlnt::streaming_workbook_reader wb_streaming_reader;
-    wb_streaming_reader.open(file_path);
+    auto cons_edge_begin = std::chrono::steady_clock::now();
 
-    for (auto sheet_name : wb_streaming_reader.sheet_titles())
+    // 打印当前写入进度
+    WaitGroup wait_output_thread;
+
+    const auto file_type = get_file_type(file_path);
+    if (file_type == FileType::Excel)
     {
-        wb_streaming_reader.begin_worksheet(sheet_name);
-        DEFER(wb_streaming_reader.end_worksheet(););
+        bool                            first_row = true;
+        xlnt::streaming_workbook_reader wb_streaming_reader;
+        wb_streaming_reader.open(file_path);
 
-        while (true)
+        for (auto sheet_name : wb_streaming_reader.sheet_titles())
+        {
+            wb_streaming_reader.begin_worksheet(sheet_name);
+            DEFER(wb_streaming_reader.end_worksheet(););
+
+            while (true)
+            {
+                EdgeRowData edgeRowData;
+                if (!wb_streaming_reader.has_cell())
+                {
+                    break;
+                }
+                edgeRowData.start_pk = wb_streaming_reader.read_cell().to_string();
+
+                if (!wb_streaming_reader.has_cell())
+                {
+                    break;
+                }
+                edgeRowData.start_label_type = wb_streaming_reader.read_cell().to_string();
+
+                if (!wb_streaming_reader.has_cell())
+                {
+                    break;
+                }
+                edgeRowData.relation_type = wb_streaming_reader.read_cell().to_string();
+
+                if (!wb_streaming_reader.has_cell())
+                {
+                    break;
+                }
+                edgeRowData.end_pk = wb_streaming_reader.read_cell().to_string();
+
+                if (!wb_streaming_reader.has_cell())
+                {
+                    break;
+                }
+                edgeRowData.end_label_type = wb_streaming_reader.read_cell().to_string();
+
+                if (first_row)
+                {
+                    first_row = false;
+                    continue;
+                }
+
+                edgeRowData.relation_type_id    = writer->write_relation_type(edgeRowData.relation_type);
+                edgeRowData.start_label_type_id = writer->write_label_type(edgeRowData.start_label_type);
+                edgeRowData.end_label_type_id   = writer->write_label_type(edgeRowData.end_label_type);
+
+                batch_edge_row->emplace_back(std::move(edgeRowData));
+
+                if (batch_edge_row->size() >= batch_size)
+                {
+                    auto t_end = std::chrono::steady_clock::now();
+                    auto milliseconds =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(t_end - cons_edge_begin).count();
+                    spdlog::debug("cons edges  cost {} ms", milliseconds);
+
+                    run_write_task();
+                    cons_edge_begin = std::chrono::steady_clock::now();
+                }
+            }
+        }
+    }
+    else if (file_type == FileType::CSV)
+    {
+        io::LineReader lr(file_path);
+        size_t         line_count = 0;
+        while (lr.next_line())
+        {
+            line_count++;
+        }
+
+        spdlog::info("total csv file line num:{}", line_count);
+
+        wait_output_thread.add();
+        std::thread([&]() {
+            DEFER(wait_output_thread.done());
+
+            NeonArrowBar bar("IMPORT DATA", line_count, 80);
+
+            auto last_value = writed_edges_num->load();
+            while (!writed_completed.load())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                auto new_value = writed_edges_num->load();
+                if (new_value > last_value)
+                {
+                    bar.update(new_value, "Loading...");
+                    last_value = new_value;
+                }
+            }
+        }).detach();
+
+        io::CSVReader<5> csv_reader(file_path);
+
+        // 读取标题行，忽略多余的列
+        csv_reader.read_header(io::ignore_extra_column, "startId", "startLabel", "edgeLabel", "endId", "endLabel");
+
+        std::string startId;
+        std::string startLabel;
+        std::string edgeLabel;
+        std::string endId;
+        std::string endLabel;
+        // 流式读取每一行
+        while (csv_reader.read_row(startId, startLabel, edgeLabel, endId, endLabel))
         {
             EdgeRowData edgeRowData;
-            if (!wb_streaming_reader.has_cell())
-            {
-                break;
-            }
-            edgeRowData.start_pk = wb_streaming_reader.read_cell().to_string();
 
-            if (!wb_streaming_reader.has_cell())
-            {
-                break;
-            }
-            edgeRowData.start_label_type = wb_streaming_reader.read_cell().to_string();
-
-            if (!wb_streaming_reader.has_cell())
-            {
-                break;
-            }
-            edgeRowData.relation_type = wb_streaming_reader.read_cell().to_string();
-
-            if (!wb_streaming_reader.has_cell())
-            {
-                break;
-            }
-            edgeRowData.end_pk = wb_streaming_reader.read_cell().to_string();
-
-            if (!wb_streaming_reader.has_cell())
-            {
-                break;
-            }
-            edgeRowData.end_label_type = wb_streaming_reader.read_cell().to_string();
-
-            if (first_row)
-            {
-                first_row = false;
-                continue;
-            }
+            edgeRowData.start_pk         = startId;
+            edgeRowData.start_label_type = startLabel;
+            edgeRowData.relation_type    = edgeLabel;
+            edgeRowData.end_pk           = endId;
+            edgeRowData.end_label_type   = endLabel;
 
             edgeRowData.relation_type_id    = writer->write_relation_type(edgeRowData.relation_type);
             edgeRowData.start_label_type_id = writer->write_label_type(edgeRowData.start_label_type);
@@ -311,16 +409,17 @@ void Importer::import_data(const std::string&     file_path,
                 auto t_end = std::chrono::steady_clock::now();
                 auto milliseconds =
                     std::chrono::duration_cast<std::chrono::milliseconds>(t_end - cons_edge_begin).count();
-                spdlog::info("cons edges  cost {} ms", milliseconds);
+                spdlog::debug("cons edges  cost {} ms", milliseconds);
 
-                spdlog::info("current excel row num:{}", current_excel_row_num);
-                // TODO::先查询 这些点是否存在，对不存在的点进行分hash写入
-                // TODO::然后再写边
                 run_write_task();
                 cons_edge_begin = std::chrono::steady_clock::now();
             }
-            current_excel_row_num++;
         }
+    }
+    else
+    {
+        spdlog::error("only support excel or csv file now");
+        throw std::runtime_error("only support excel or csv file now");
     }
 
     if (!batch_edge_row->empty())

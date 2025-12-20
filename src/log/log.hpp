@@ -4,7 +4,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/daily_file_sink.h>
 
-static void initialize_log()
+static void initialize_log(spdlog::level::level_enum log_level = spdlog::level::info)
 {
     const std::string log_pattern = "[%H:%M:%S.%3f %z] [%^%l%$] [thread %t] %v";
 
@@ -14,7 +14,7 @@ static void initialize_log()
     std::vector<spdlog::sink_ptr> sinks{console_sink, daily_sink};
     for (auto& sink : sinks)
     {
-        sink->set_level(spdlog::level::info);
+        sink->set_level(log_level);
         sink->set_pattern(log_pattern);
     }
 
