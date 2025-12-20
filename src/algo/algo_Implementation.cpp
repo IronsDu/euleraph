@@ -103,6 +103,11 @@ int AlgoImpl::get_wcc_count(const WCCParams& params, std::shared_ptr<ReaderInter
     return 0;
 }
 
+int AlgoImpl::get_subgraph_matching_count(const SubgraphMatchingParams& params, std::shared_ptr<ReaderInterface> reader)
+{
+    return 0;
+}
+
 std::shared_ptr<AlgoInterface> create_algo()
 {
     return std::make_shared<AlgoImpl>();

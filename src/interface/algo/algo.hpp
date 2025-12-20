@@ -4,6 +4,7 @@
 #include "interface/types/types.hpp"
 #include "interface/storage/reader.hpp"
 #include <memory>
+#include <unordered_map>
 
 struct KHopQueryParams {
     int k = 0; // 跳数（K ≥ 1）
@@ -21,6 +22,18 @@ struct CommonNeighborQueryParams {
 struct WCCParams {
     std::vector<LabelTypeId> label_type_id_list; // 节点标签（可选）
     std::vector<RelationTypeId> relation_label_type_id_list; // 边标签（可选）
+};
+
+struct PatternEdge
+{
+    std::string source_node;
+    std::string target_node;
+    std::vector<RelationTypeId> relation_type_id_list; // 关系类型ID数组
+    EdgeDirection direction; // 边的方向
+};
+struct SubgraphMatchingParams {
+    std::unordered_map<std::string, std::vector<LabelTypeId>> nodes_pattern_map;
+    std::vector<PatternEdge> edges_pattern_list;
 };
 
 class AlgoInterface
@@ -42,6 +55,11 @@ public:
     // @param 见WCCParams
     // @return 连通分量总数
     virtual int get_wcc_count(const WCCParams& params, std::shared_ptr<ReaderInterface> reader) = 0;
+
+    // @brief 子图匹配(子图同态)算法，根据输入的一组节点列表，返回匹配的子图实例总数
+    // @param 见SubgraphMatchingParams
+    // @return 匹配的子图实例总数
+    virtual int get_subgraph_matching_count(const SubgraphMatchingParams& params, std::shared_ptr<ReaderInterface> reader) = 0;
 };
 
 std::shared_ptr<AlgoInterface> create_algo();

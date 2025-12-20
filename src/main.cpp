@@ -280,6 +280,12 @@ ___________     .__                             .__
                               EuleraphHttpHandle::wcc_query(req, std::move(callback), reader);
                           },
                           {Post});
+    app().registerHandler("/api/v1/algorithms/subgraph-matching",
+                          [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+                              auto reader = std::make_shared<OneTrxReaderWiredTiger>(conn);
+                              EuleraphHttpHandle::subgraph_matching_query(req, std::move(callback), reader);
+                          },
+                          {Post});
     app().setUploadPath(web_dir);
     app().run();
 

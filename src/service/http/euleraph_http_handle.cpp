@@ -521,3 +521,127 @@ void EuleraphHttpHandle::wcc_query(const HttpRequestPtr&                        
         callback(resp);
     }
 }
+
+EdgeDirection get_direction(std::string direction)
+{
+    if (direction == "IN") {
+        return EdgeDirection::INCOMING;
+    } else if (direction == "OUT") {
+        return EdgeDirection::OUTGOING;
+    } else {
+        spdlog::info("direction must be 'IN' or 'OUT'");
+        return EdgeDirection::UNDIRECTED;
+    }
+}
+std::optional<SubgraphMatchingParams> parse_subgraph_matching_params(const Json::Value&               jsonBody,
+                                                                     std::shared_ptr<ReaderInterface> reader)
+{
+    SubgraphMatchingParams params;
+    // 1. 提取 nodes中的id
+    if (!jsonBody.isMember("nodes") || !jsonBody["nodes"].isArray())
+    {
+        spdlog::error("Missing or invalid 'nodes' array");
+        return std::nullopt;
+    }
+
+    for (const auto& node : jsonBody["nodes"])
+    {
+        std::vector<LabelTypeId> labels_type_id_list;
+        for (const auto& label_type : node["labels"])
+        {
+            auto label_type_id = reader->get_label_type_id(label_type.asString());
+            if (!label_type_id)
+            {
+                spdlog::error("label type not found:{}", label_type.asString());
+                return std::nullopt;
+            }
+            labels_type_id_list.push_back(*label_type_id);
+        }
+        params.nodes_pattern_map[node["var"].asString()] = labels_type_id_list;
+    }
+
+    // 2.提取 edges_pattern
+    if (!jsonBody.isMember("edges") || !jsonBody["edges"].isArray())
+    {
+        spdlog::error("Missing or invalid 'edges' array");
+        return std::nullopt;
+    }
+    for (const auto& edge : jsonBody["edges"])
+    {
+        PatternEdge edge_pattern;
+        for (const auto& relation_label_type : edge["labels"])
+        {
+            auto relation_label_type_id = reader->get_relation_type_id(relation_label_type.asString());
+            if (!relation_label_type_id)
+            {
+                spdlog::error("Relation label not found:{}", relation_label_type.asString());
+                return std::nullopt;
+            }
+            edge_pattern.relation_type_id_list.push_back(*relation_label_type_id);
+        }
+        edge_pattern.source_node = edge["source"].asString();
+        edge_pattern.target_node = edge["target"].asString();
+        edge_pattern.direction = get_direction(edge["direction"].asString());
+        params.edges_pattern_list.push_back(edge_pattern);
+    }
+    return params;
+}
+
+void EuleraphHttpHandle::subgraph_matching_query(const HttpRequestPtr&                         req,
+                                                 std::function<void(const HttpResponsePtr&)>&& callback,
+                                                 std::shared_ptr<ReaderInterface>              reader)
+{
+    // 1. 检查 Content-Type 是否为 JSON
+    if (req->contentType() != CT_APPLICATION_JSON)
+    {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setContentTypeCode(CT_TEXT_PLAIN);
+        resp->setBody("Content-Type must be application/json");
+        callback(resp);
+        return;
+    }
+
+    // 2. 解析 JSON 请求体
+    const auto& jsonBody = req->getJsonObject();
+    if (!jsonBody)
+    {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setContentTypeCode(CT_TEXT_PLAIN);
+        resp->setBody("Invalid JSON");
+        callback(resp);
+        return;
+    }
+
+    try
+    {
+        Json::Value jsonResponse;
+        // 3.解析json获取算法需要的参数
+        auto params = parse_subgraph_matching_params(*jsonBody, reader);
+        if (params)
+        {
+            // 4. 业务逻辑：调用算法接口计算子图匹配(子图同态)总数
+            auto algo             = create_algo();
+            int  count            = algo->get_subgraph_matching_count(*params, reader);
+            jsonResponse["code"]  = 0;
+            jsonResponse["count"] = count;
+        }
+        else
+        {
+            jsonResponse["code"] = -1;
+        }
+
+        auto resp = HttpResponse::newHttpJsonResponse(jsonResponse);
+        resp->setStatusCode(k200OK);
+        callback(resp);
+    }
+    catch (const std::exception& e)
+    {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setContentTypeCode(CT_TEXT_PLAIN);
+        resp->setBody(std::string("Error: ") + e.what());
+        callback(resp);
+    }
+}
