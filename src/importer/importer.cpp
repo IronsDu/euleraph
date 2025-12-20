@@ -86,7 +86,27 @@ static void import_edges_first_step(std::vector<EdgeRowData>&                  e
     }
 
     // 写入待处理列表
-    auto fuck_ids = writer->write_vertices(unresolve_pks);
+    std::vector<VertexId> fuck_ids;
+    bool                  have_retry = false;
+    while (true)
+    {
+        try
+        {
+            fuck_ids = writer->write_vertices(unresolve_pks);
+        }
+        catch (const std::runtime_error& e)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            spdlog::error("batch write_vertices catch exception:{}, will retry", e.what());
+            have_retry = true;
+            continue;
+        }
+        if (have_retry)
+        {
+            spdlog::info("retry write_vertices success");
+        }
+        break;
+    }
     if (fuck_ids.size() != unresolve_pks.size())
     {
         spdlog::error("size not equal: {} != {}", fuck_ids.size(), unresolve_pks.size());
@@ -132,7 +152,26 @@ static void import_edges_first_step(std::vector<EdgeRowData>&                  e
 
         const auto t_begin = std::chrono::steady_clock::now();
         auto       writer  = writer_interface_generator();
-        writer->write_edges(edges);
+
+        bool have_retry = false;
+        while (true)
+        {
+            try
+            {
+                writer->write_edges(edges);
+            }
+            catch (const std::runtime_error& e)
+            {
+                spdlog::error("batch write_edges catch exception:{}, will retry", e.what());
+                have_retry = true;
+                continue;
+            }
+            if (have_retry)
+            {
+                spdlog::info("retry write_edges success");
+            }
+            break;
+        }
 
         auto t_end        = std::chrono::steady_clock::now();
         auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_begin).count();
