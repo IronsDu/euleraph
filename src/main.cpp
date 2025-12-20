@@ -257,7 +257,7 @@ ___________     .__                             .__
     app().registerHandler("/api/v1/algorithms/k-hop-neighbors",
                           [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
                               auto reader = std::make_shared<ReaderWiredTiger>(conn);
-                              EuleraphHttpHandle::k_hop_neighbor_query(req, std::move(callback), reader);
+                              EuleraphHttpHandle::k_hop_neighbor_query(req, std::move(callback), reader, conn);
                           },
                           {Post});
     app().registerHandler("/api/v1/algorithms/common-neighbors",

@@ -238,7 +238,8 @@ std::optional<KHopQueryParams> parse_khop_query_params(const Json::Value&       
 
 void EuleraphHttpHandle::k_hop_neighbor_query(const HttpRequestPtr&                         req,
                                               std::function<void(const HttpResponsePtr&)>&& callback,
-                                              std::shared_ptr<ReaderInterface>              reader)
+                                              std::shared_ptr<ReaderInterface>              reader,
+                                              WT_CONNECTION*                                conn)
 {
     // 1. 检查 Content-Type 是否为 JSON
     if (req->contentType() != CT_APPLICATION_JSON)
@@ -272,7 +273,7 @@ void EuleraphHttpHandle::k_hop_neighbor_query(const HttpRequestPtr&             
         {
             // 4. 业务逻辑：调用算法接口计算k度邻居总数
             auto algo             = create_algo();
-            int  count            = algo->get_k_hop_neighbor_count(*params, reader);
+            auto count            = algo->get_k_hop_neighbor_count(*params, reader, conn);
             jsonResponse["code"]  = 0;
             jsonResponse["count"] = count;
         }
