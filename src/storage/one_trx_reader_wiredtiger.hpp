@@ -26,6 +26,8 @@ public:
     std::optional<VertexId> get_vertex_id(const LabelTypeId& label_type_id, const VertexPk& vertex_pk) override;
     std::optional<VertexPk> get_vertex_pk_by_id(VertexId vertex_id) override;
 
+    void scan_vertex_id(ReaderInterface::VertexIdCallback callback) override;
+
     // 目前start_label_type_id参数只是在构造返回的边中使用
     std::vector<Edge> get_neighbors_by_start_vertex(const VertexId&               start_vertex_id,
                                                     const LabelTypeId&            start_label_type_id,
