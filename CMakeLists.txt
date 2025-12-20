@@ -27,7 +27,8 @@ add_executable(euleraph src/main.cpp
 "src/storage/reader_wiredtiger.cpp"
 "src/storage/one_trx_reader_wiredtiger.cpp"
 "src/storage/wiredtiger_common.cpp"
-"src/algo/algo_Implementation.cpp")
+"src/algo/algo_Implementation.cpp"
+"src/algo/k_hop_neighbors_count.cpp")
 
 find_package(Drogon CONFIG REQUIRED)
 find_package(Xlnt CONFIG REQUIRED)
