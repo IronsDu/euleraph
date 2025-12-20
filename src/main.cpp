@@ -16,10 +16,11 @@
 
 using namespace drogon;
 
-constexpr int  DEFAULT_BATCH_SIZE = 1000;
-constexpr int  PORT               = 8200;
-constexpr int  CacheSize          = 512; // MB
-constexpr bool DefaultNeedImport  = false;
+constexpr int     DEFAULT_BATCH_SIZE = 1000;
+constexpr int     PORT               = 8200;
+constexpr int     CacheSize          = 512; // MB
+constexpr bool    DefaultNeedImport  = false;
+const std::string DefaultLogLevel    = std::string("info");
 
 static int DefaultConcurrency()
 {
@@ -45,6 +46,7 @@ struct cli_args
     int         port;
     bool        need_import = DefaultNeedImport;
     int         cache_size  = CacheSize; // MB
+    std::string log_level   = DefaultLogLevel;
 };
 
 static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
@@ -69,22 +71,27 @@ static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
                                              {"need_import"},
                            DefaultNeedImport);
 
-    args::ValueFlag<int> batch_size(parser,
+    args::ValueFlag<int>         batch_size(parser,
                                     "batch_size",
                                     fmt::format("batch size (optional, default:{})", DEFAULT_BATCH_SIZE),
-                                    {"batch_size"},
+                                            {"batch_size"},
                                     DEFAULT_BATCH_SIZE);
-    args::ValueFlag<int> concurrency(parser,
+    args::ValueFlag<int>         concurrency(parser,
                                      "concurrency",
                                      fmt::format("Concurrency (optional, default:{})", DefaultConcurrency()),
-                                     {"concurrency"},
+                                             {"concurrency"},
                                      DefaultConcurrency());
-    args::ValueFlag<int> port(parser, "port", "Port (optional)", {"port"}, PORT);
-    args::ValueFlag<int> cache_size(parser,
+    args::ValueFlag<int>         port(parser, "port", "Port (optional)", {"port"}, PORT);
+    args::ValueFlag<int>         cache_size(parser,
                                     "cache_size",
                                     fmt::format("WiredTiger Cache size in MB (optional, default:{})", CacheSize),
-                                    {"cache_size"},
+                                            {"cache_size"},
                                     CacheSize);
+    args::ValueFlag<std::string> log_level(parser,
+                                           "log_level",
+                                           fmt::format("Log level (optional, default:{})", DefaultLogLevel),
+                                           {"log_level"},
+                                           DefaultLogLevel);
 
     try
     {
@@ -112,6 +119,10 @@ static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
         if (cache_size)
         {
             out_args.cache_size = args::get(cache_size);
+        }
+        if (log_level)
+        {
+            out_args.log_level = args::get(log_level);
         }
 
         if (out_args.batch_size <= 0 || out_args.concurrency <= 0 || out_args.port <= 0 || out_args.cache_size <= 0)
@@ -183,6 +194,7 @@ ___________     .__                             .__
     {
         return 1;
     }
+    spdlog::set_level(spdlog::level::from_str(param.log_level));
 
     wiredtiger_initialize_databse_schema(param.database_dir);
     if (wiredtiger_open(param.database_dir.c_str(),
