@@ -271,10 +271,10 @@ void EuleraphHttpHandle::k_hop_neighbor_query(const HttpRequestPtr&             
         if (params)
         {
             // 4. 业务逻辑：调用算法接口计算k度邻居总数
-            auto algo            = create_algo();
-            int  count           = algo->get_k_hop_neighbor_count(*params, reader);
-            jsonResponse["code"] = 0;
-            jsonResponse["data"] = count;
+            auto algo             = create_algo();
+            int  count            = algo->get_k_hop_neighbor_count(*params, reader);
+            jsonResponse["code"]  = 0;
+            jsonResponse["count"] = count;
         }
         else
         {
@@ -384,10 +384,124 @@ void EuleraphHttpHandle::common_neighbor_query(const HttpRequestPtr&            
         if (params)
         {
             // 4. 业务逻辑：调用算法接口计算共同邻居总数
-            auto algo            = create_algo();
-            int  count           = algo->get_common_neighbor_count(*params, reader);
-            jsonResponse["code"] = 0;
-            jsonResponse["data"] = count;
+            auto algo             = create_algo();
+            int  count            = algo->get_common_neighbor_count(*params, reader);
+            jsonResponse["code"]  = 0;
+            jsonResponse["count"] = count;
+        }
+        else
+        {
+            jsonResponse["code"] = -1;
+        }
+
+        auto resp = HttpResponse::newHttpJsonResponse(jsonResponse);
+        resp->setStatusCode(k200OK);
+        callback(resp);
+    }
+    catch (const std::exception& e)
+    {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setContentTypeCode(CT_TEXT_PLAIN);
+        resp->setBody(std::string("Error: ") + e.what());
+        callback(resp);
+    }
+}
+
+std::optional<WCCParams> parse_wcc_params(const Json::Value& jsonBody, std::shared_ptr<ReaderInterface> reader)
+{
+    WCCParams params;
+    // 1. 提取 n_labels
+    if (jsonBody.isMember("n_labels") && !jsonBody["n_labels"].empty())
+    {
+        if (!jsonBody["n_labels"].isArray())
+        {
+            spdlog::error("Missing or invalid 'n_labels' array");
+            return std::nullopt;
+        }
+        for (const auto& item : jsonBody["n_labels"])
+        {
+            if (!item.isString())
+            {
+                spdlog::error("All items in 'n_labels' must be strings");
+                return std::nullopt;
+            }
+            auto label_type_id = reader->get_label_type_id(item.asString());
+            if (!label_type_id)
+            {
+                spdlog::error("Relation label not found:{}", item.asString());
+                return std::nullopt;
+            }
+            params.label_type_id_list.push_back(*label_type_id);
+        }
+    }
+
+    // 2.提取可选 r_labels
+    if (jsonBody.isMember("r_labels") && !jsonBody["r_labels"].empty())
+    {
+        if (!jsonBody["r_labels"].isArray())
+        {
+            spdlog::error("Missing or invalid 'r_labels' array");
+            return std::nullopt;
+        }
+        for (const auto& item : jsonBody["r_labels"])
+        {
+            if (!item.isString())
+            {
+                spdlog::error("All items in 'r_labels' must be strings");
+                return std::nullopt;
+            }
+            auto relation_label_type_id = reader->get_relation_type_id(item.asString());
+            if (!relation_label_type_id)
+            {
+                spdlog::error("Relation label not found:{}", item.asString());
+                return std::nullopt;
+            }
+            params.relation_label_type_id_list.push_back(*relation_label_type_id);
+        }
+    }
+    return params;
+}
+
+void EuleraphHttpHandle::wcc_query(const HttpRequestPtr&                         req,
+                                   std::function<void(const HttpResponsePtr&)>&& callback,
+                                   std::shared_ptr<ReaderInterface>              reader)
+{
+    // 1. 检查 Content-Type 是否为 JSON
+    if (req->contentType() != CT_APPLICATION_JSON)
+    {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setContentTypeCode(CT_TEXT_PLAIN);
+        resp->setBody("Content-Type must be application/json");
+        callback(resp);
+        return;
+    }
+
+    // 2. 解析 JSON 请求体
+    const auto& jsonBody = req->getJsonObject();
+    if (!jsonBody)
+    {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setContentTypeCode(CT_TEXT_PLAIN);
+        resp->setBody("Invalid JSON");
+        callback(resp);
+        return;
+    }
+
+    try
+    {
+        Json::Value jsonResponse;
+        // 3.解析json获取算法需要的参数
+        auto params = parse_wcc_params(*jsonBody, reader);
+        if (params)
+        {
+            // 4. 业务逻辑：调用算法接口计算共同邻居总数
+            auto algo                       = create_algo();
+            int  count                      = algo->get_wcc_count(*params, reader);
+            jsonResponse["code"]            = 0;
+            jsonResponse["component_count"] = count;
         }
         else
         {

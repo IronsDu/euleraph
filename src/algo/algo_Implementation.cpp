@@ -98,6 +98,11 @@ int AlgoImpl::get_common_neighbor_count(const CommonNeighborQueryParams& params,
     return candidates.size();
 }
 
+int AlgoImpl::get_wcc_count(const WCCParams& params, std::shared_ptr<ReaderInterface> reader)
+{
+    return 0;
+}
+
 std::shared_ptr<AlgoInterface> create_algo()
 {
     return std::make_shared<AlgoImpl>();
