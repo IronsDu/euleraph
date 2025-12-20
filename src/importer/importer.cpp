@@ -362,7 +362,7 @@ void Importer::import_data(const std::string&     file_path,
         std::thread([&]() {
             DEFER(wait_output_thread.done());
 
-            NeonArrowBar bar("IMPORT DATA", line_count, 80);
+            NeonArrowBar bar("IMPORT DATA", line_count, t_begin, 80);
 
             auto last_value = writed_edges_num->load();
             while (!writed_completed.load())
@@ -371,7 +371,11 @@ void Importer::import_data(const std::string&     file_path,
                 auto new_value = writed_edges_num->load();
                 if (new_value > last_value)
                 {
-                    bar.update(new_value, "Loading...");
+                    const auto current_time = std::chrono::steady_clock::now();
+                    const auto seconds =
+                        std::chrono::duration_cast<std::chrono::seconds>(current_time - t_begin).count();
+
+                    bar.update(new_value, fmt::format("Loading... {}s", seconds));
                     last_value = new_value;
                 }
             }

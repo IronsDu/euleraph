@@ -1,6 +1,7 @@
 #pragma once
 
 #include <random>
+#include <fmt/format.h>
 
 // 随机颜色函数：产生紫色系的 RGB 值
 static void set_random_purple_color()
@@ -100,7 +101,8 @@ static void play_neon_banner(const std::string logo)
 class NeonArrowBar
 {
 public:
-    NeonArrowBar(const std::string& label, int total, int width = 40) : label_(label), total_(total), bar_width_(width)
+    NeonArrowBar(const std::string& label, int total, std::chrono::steady_clock::time_point start_time, int width = 40)
+        : label_(label), total_(total), start_time_(start_time), bar_width_(width)
     {
         std::cout << "\033[?25l"; // 隐藏光标
     }
@@ -176,15 +178,18 @@ public:
     {
         if (!finished_)
         {
-            update(total_, "Done.");
+            const auto now     = std::chrono::steady_clock::now();
+            const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count();
+            update(total_, fmt::format("Done. Total time:{}s", elapsed));
             std::cout << "\033[?25h" << std::endl; // 恢复光标并换行
             finished_ = true;
         }
     }
 
 private:
-    std::string label_;
-    int         total_;
-    int         bar_width_;
-    bool        finished_ = false;
+    std::string                                 label_;
+    int                                         total_;
+    int                                         bar_width_;
+    bool                                        finished_ = false;
+    const std::chrono::steady_clock::time_point start_time_; // 存储起始时间
 };
