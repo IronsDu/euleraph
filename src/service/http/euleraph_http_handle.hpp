@@ -21,4 +21,7 @@ public:
     static void wcc_query(const HttpRequestPtr&                         req,
                           std::function<void(const HttpResponsePtr&)>&& callback,
                           std::shared_ptr<ReaderInterface>              reader);
+    static void subgraph_matching_query(const HttpRequestPtr&                         req,
+                                        std::function<void(const HttpResponsePtr&)>&& callback,
+                                        std::shared_ptr<ReaderInterface>              reader);
 };
