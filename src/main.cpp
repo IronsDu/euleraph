@@ -18,7 +18,7 @@ using namespace drogon;
 
 constexpr int     DEFAULT_BATCH_SIZE = 1000;
 constexpr int     PORT               = 8200;
-constexpr int     CacheSize          = 512; // MB
+constexpr int     CacheSize          = 2048; // MB
 constexpr bool    DefaultNeedImport  = false;
 const std::string DefaultLogLevel    = std::string("info");
 
@@ -40,13 +40,14 @@ struct cli_args
     // 数据库目录
     std::string database_dir;
     // excel 文件路径
-    std::string data_path;
-    int         batch_size;
-    int         concurrency;
-    int         port;
-    bool        need_import = DefaultNeedImport;
-    int         cache_size  = CacheSize; // MB
-    std::string log_level   = DefaultLogLevel;
+    std::string            data_path;
+    int                    batch_size;
+    int                    concurrency;
+    int                    port;
+    bool                   need_import = DefaultNeedImport;
+    int                    cache_size  = CacheSize; // MB
+    std::string            log_level   = DefaultLogLevel;
+    std::optional<int64_t> csv_row_num;
 };
 
 static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
@@ -92,6 +93,10 @@ static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
                                            fmt::format("Log level (optional, default:{})", DefaultLogLevel),
                                            {"log_level"},
                                            DefaultLogLevel);
+    args::ValueFlag<int64_t>     csv_row_num(parser,
+                                         "csv_row_num",
+                                         "number of rows in csv file (optional, default: all rows)",
+                                             {"csv_row_num"});
 
     try
     {
@@ -123,6 +128,14 @@ static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
         if (log_level)
         {
             out_args.log_level = args::get(log_level);
+        }
+        if (csv_row_num)
+        {
+            out_args.csv_row_num = args::get(csv_row_num);
+            if (out_args.csv_row_num <= 0)
+            {
+                throw args::ParseError("csv_row_num must be a positive integer.");
+            }
         }
 
         if (out_args.batch_size <= 0 || out_args.concurrency <= 0 || out_args.port <= 0 || out_args.cache_size <= 0)
@@ -219,7 +232,12 @@ ___________     .__                             .__
         try
         {
             Importer importer;
-            importer.import_data(param.data_path, param.concurrency, param.batch_size, make_writer, make_reader);
+            importer.import_data(param.data_path,
+                                 param.concurrency,
+                                 param.batch_size,
+                                 make_writer,
+                                 make_reader,
+                                 param.csv_row_num);
 
             // 创建数据导入后的检查点，避免重启后数据丢失
             WT_SESSION* session_;

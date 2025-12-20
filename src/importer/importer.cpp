@@ -221,7 +221,8 @@ void Importer::import_data(const std::string&     file_path,
                            int                    write_edge_thread_pool_concurrency_num,
                            int                    batch_size,
                            WriterInterfaceFactory wirter_interface_generator,
-                           ReaderInterfaceFactory reader_interface_factory)
+                           ReaderInterfaceFactory reader_interface_factory,
+                           std::optional<int64_t> csv_row_num)
 {
     const auto t_begin = std::chrono::steady_clock::now();
 
@@ -349,11 +350,18 @@ void Importer::import_data(const std::string&     file_path,
     }
     else if (file_type == FileType::CSV)
     {
-        io::LineReader lr(file_path);
-        size_t         line_count = 0;
-        while (lr.next_line())
+        size_t line_count = 0;
+        if (csv_row_num)
         {
-            line_count++;
+            line_count = csv_row_num.value();
+        }
+        else
+        {
+            io::LineReader lr(file_path);
+            while (lr.next_line())
+            {
+                line_count++;
+            }
         }
 
         spdlog::info("total csv file line num:{}", line_count);
@@ -362,7 +370,7 @@ void Importer::import_data(const std::string&     file_path,
         std::thread([&]() {
             DEFER(wait_output_thread.done());
 
-            NeonArrowBar bar("IMPORT DATA", line_count, t_begin, 80);
+            NeonArrowBar bar("IMPORT", line_count, t_begin, 70);
 
             auto last_value = writed_edges_num->load();
             while (!writed_completed.load())
@@ -375,7 +383,7 @@ void Importer::import_data(const std::string&     file_path,
                     const auto seconds =
                         std::chrono::duration_cast<std::chrono::seconds>(current_time - t_begin).count();
 
-                    bar.update(new_value, fmt::format("Loading... {}s", seconds));
+                    bar.update(new_value, fmt::format("Loading... {}s, {}", seconds, new_value));
                     last_value = new_value;
                 }
             }
