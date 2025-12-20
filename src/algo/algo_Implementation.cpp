@@ -10,7 +10,7 @@ int AlgoImpl::get_k_hop_neighbor_count(const KHopQueryParams& params, std::share
 }
 
 int AlgoImpl::get_common_neighbor_count(const CommonNeighborQueryParams& params,
-                                             std::shared_ptr<ReaderInterface> reader)
+                                        std::shared_ptr<ReaderInterface> reader)
 {
     if (params.vertex_id_list.size() <= 1)
         return 0;
@@ -22,22 +22,39 @@ int AlgoImpl::get_common_neighbor_count(const CommonNeighborQueryParams& params,
     {
         // 查找当前点的邻居点集合
         std::unordered_set<VertexId> neighbors;
+        std::unordered_set<VertexId> outgoing_neighbors;
         if (params.relation_label_type_id_list.empty())
         {
-            auto edges = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::UNDIRECTED, std::nullopt);
-            for (const auto& e : edges)
+            auto edges_outgoing = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::OUTGOING, std::nullopt);
+            for (const auto& e_o : edges_outgoing)
             {
-                neighbors.insert(e.end_vertex_id);
+                outgoing_neighbors.insert(e_o.end_vertex_id);
+            }
+            auto edges_incoming = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::INCOMING, std::nullopt);
+            for (const auto& e_i : edges_incoming)
+            {
+                if (outgoing_neighbors.count(e_i.end_vertex_id))
+                {
+                    neighbors.insert(e_i.end_vertex_id);
+                }
             }
         }
         else
         {
             for (const auto& r : params.relation_label_type_id_list)
             {
-                auto edges = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::UNDIRECTED, r);
-                for (const auto& e : edges)
+                auto edges_outgoing = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::OUTGOING, r);
+                for (const auto& e_o : edges_outgoing)
                 {
-                    neighbors.insert(e.end_vertex_id);
+                    outgoing_neighbors.insert(e_o.end_vertex_id);
+                }
+                auto edges_incoming = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::INCOMING, r);
+                for (const auto& e_i : edges_incoming)
+                {
+                    if (outgoing_neighbors.count(e_i.end_vertex_id))
+                    {
+                        neighbors.insert(e_i.end_vertex_id);
+                    }
                 }
             }
         }
@@ -81,6 +98,7 @@ int AlgoImpl::get_common_neighbor_count(const CommonNeighborQueryParams& params,
     return candidates.size();
 }
 
-std::shared_ptr<AlgoInterface> create_algo() {
+std::shared_ptr<AlgoInterface> create_algo()
+{
     return std::make_shared<AlgoImpl>();
 }

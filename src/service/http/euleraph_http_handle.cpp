@@ -177,13 +177,13 @@ std::optional<KHopQueryParams> parse_khop_query_params(const Json::Value&       
     params.k = jsonBody["k"].asInt();
 
     // 3. 提取可选 n_labels
-    if (!jsonBody.isMember("n_labels") || !jsonBody["n_labels"].isArray())
+    if (jsonBody.isMember("n_labels") && !jsonBody["n_labels"].empty())
     {
-        spdlog::error("Missing or invalid 'n_labels' array");
-        return std::nullopt;
-    }
-    if (!jsonBody["n_labels"].empty())
-    {
+        if (!jsonBody["n_labels"].isArray())
+        {
+            spdlog::error("Missing or invalid 'n_labels' array");
+            return std::nullopt;
+        }
         for (const auto& item : jsonBody["n_labels"])
         {
             if (!item.isString())
@@ -202,13 +202,13 @@ std::optional<KHopQueryParams> parse_khop_query_params(const Json::Value&       
     }
 
     // 4.提取可选 r_labels
-    if (!jsonBody.isMember("r_labels") || !jsonBody["r_labels"].isArray())
+    if (jsonBody.isMember("r_labels") && !jsonBody["r_labels"].empty())
     {
-        spdlog::error("Missing or invalid 'r_labels' array");
-        return std::nullopt;
-    }
-    if (!jsonBody["r_labels"].empty())
-    {
+        if (!jsonBody["r_labels"].isArray())
+        {
+            spdlog::error("Missing or invalid 'r_labels' array");
+            return std::nullopt;
+        }
         for (const auto& item : jsonBody["r_labels"])
         {
             if (!item.isString())
@@ -299,7 +299,7 @@ std::optional<CommonNeighborQueryParams> parse_common_neighbor_query_params(cons
                                                                             std::shared_ptr<ReaderInterface> reader)
 {
     CommonNeighborQueryParams params;
-    // 1. 提取可选 node_ids
+    // 1. 提取 node_ids
     if (!jsonBody.isMember("node_ids") || !jsonBody["node_ids"].isArray())
     {
         spdlog::error("Missing or invalid 'node_ids' array");
@@ -323,13 +323,13 @@ std::optional<CommonNeighborQueryParams> parse_common_neighbor_query_params(cons
     }
 
     // 2.提取可选 r_labels
-    if (!jsonBody.isMember("r_labels") || !jsonBody["r_labels"].isArray())
+    if (jsonBody.isMember("r_labels") && !jsonBody["r_labels"].empty())
     {
-        spdlog::error("Missing or invalid 'r_labels' array");
-        return std::nullopt;
-    }
-    if (!jsonBody["r_labels"].empty())
-    {
+        if (!jsonBody["r_labels"].isArray())
+        {
+            spdlog::error("Missing or invalid 'r_labels' array");
+            return std::nullopt;
+        }
         for (const auto& item : jsonBody["r_labels"])
         {
             if (!item.isString())
