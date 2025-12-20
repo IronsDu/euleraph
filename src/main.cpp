@@ -175,6 +175,17 @@ ___________     .__                             .__
         {
             Importer importer;
             importer.import_data(param.data_path, param.concurrency, param.batch_size, make_writer, make_reader);
+
+            // 创建数据导入后的检查点，避免重启后数据丢失
+            WT_SESSION* session_;
+            conn->open_session(conn, nullptr, nullptr, &session_);
+            int code = session_->checkpoint(session_, nullptr);
+            if (code != 0)
+            {
+                spdlog::error("Failed to create checkpoint after data import");
+                return 1;
+            }
+            session_->close(session_, nullptr);
         }
         catch (const std::exception& e)
         {
