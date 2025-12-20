@@ -28,7 +28,7 @@ using EdgeId = std::uint64_t;
 enum class EdgeDirection : uint8_t
 {
     // 出边
-    OUTGOING = 1,
+    OUTGOING,
     // 入边
     INCOMING,
     // 无向边
