@@ -3,6 +3,7 @@
 #include <string>
 #include <cstddef>
 
+#include <optional>
 #include <functional>
 
 #include "interface/storage/reader.hpp"
@@ -20,5 +21,6 @@ public:
                      int                    write_edge_thread_pool_concurrency_num,
                      int                    batch_size,
                      WriterInterfaceFactory wirter_interface_generator,
-                     ReaderInterfaceFactory reader_interface_factory);
+                     ReaderInterfaceFactory reader_interface_factory,
+                     std::optional<int64_t> csv_row_num);
 };
