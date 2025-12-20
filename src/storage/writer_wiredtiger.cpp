@@ -4,7 +4,9 @@
 #include <filesystem>
 #include <iostream>
 
-#include "wiredtiger.h"
+#include <wiredtiger.h>
+#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 #include "storage/wiredtiger_common.hpp"
 
 #include "utils/defer.hpp"
@@ -141,18 +143,27 @@ VertexId WriterWiredTiger::write_vertex(const Vertex& vertice)
     code = session_->open_cursor(session_, "table:vertex", nullptr, "append", &cursor);
     if (code != 0)
     {
-        throw std::runtime_error("");
+        throw std::runtime_error(fmt::format("write vertex, pk:{}, label id:{} open_cursor failed, code:{}",
+                                             vertice.vertex_pk,
+                                             vertice.label_type_id,
+                                             code));
     }
     cursor->set_value(cursor, vertice.label_type_id, vertice.vertex_pk.c_str());
     code = cursor->insert(cursor);
     if (code != 0)
     {
-        throw std::runtime_error("");
+        throw std::runtime_error(fmt::format("write vertex, pk:{}, label id:{} insert failed, code:{}",
+                                             vertice.vertex_pk,
+                                             vertice.label_type_id,
+                                             code));
     }
     code = cursor->get_key(cursor, &record_number);
     if (code != 0)
     {
-        throw std::runtime_error("");
+        throw std::runtime_error(fmt::format("write vertex, pk:{}, label id:{} get_key failed, code:{}",
+                                             vertice.vertex_pk,
+                                             vertice.label_type_id,
+                                             code));
     }
 
     return record_number;
@@ -164,7 +175,7 @@ std::vector<VertexId> WriterWiredTiger::write_vertices(const std::vector<Vertex>
     code     = session_->begin_transaction(session_, NULL);
     if (code != 0)
     {
-        throw std::runtime_error("");
+        throw std::runtime_error(fmt::format("batch write vertexs, begin transaction failed code:{}", code));
     }
 
     std::vector<VertexId> result;
@@ -179,7 +190,7 @@ std::vector<VertexId> WriterWiredTiger::write_vertices(const std::vector<Vertex>
         code = session_->open_cursor(session_, "table:vertex", nullptr, "append", &cursor);
         if (code != 0)
         {
-            throw std::runtime_error("");
+            throw std::runtime_error(fmt::format("batch write vertexs, open_cursor failed code:{}", code));
         }
 
         const auto vertices_size = vertices.size();
@@ -191,22 +202,37 @@ std::vector<VertexId> WriterWiredTiger::write_vertices(const std::vector<Vertex>
             code = cursor->insert(cursor);
             if (code != 0)
             {
-                throw std::runtime_error("");
+                throw std::runtime_error(
+                    fmt::format("batch write vertexs, insert failed code:{}, vertex pk:{}, label type id:{}",
+                                code,
+                                vertice.vertex_pk,
+                                vertice.label_type_id));
             }
             uint64_t record_number = 0;
             code                   = cursor->get_key(cursor, &record_number);
             if (code != 0)
             {
-                throw std::runtime_error("");
+                throw std::runtime_error(
+                    fmt::format("batch write vertexs, get_key failed code:{}, vertex pk:{}, label type id:{}",
+                                code,
+                                vertice.vertex_pk,
+                                vertice.label_type_id));
             }
 
             result[i] = record_number;
         }
     }
+    catch (const std::runtime_error& e)
+    {
+        spdlog::error("batch write vertexs catch exception:{}", e.what());
+        session_->rollback_transaction(session_, NULL);
+        throw;
+    }
     catch (...)
     {
+        spdlog::error("batch write vertexs catch unknown exception");
         session_->rollback_transaction(session_, NULL);
-        throw std::runtime_error("");
+        throw;
     }
 
     code = session_->commit_transaction(session_, NULL);
@@ -230,7 +256,7 @@ void WriterWiredTiger::write_edge(const Edge& edge)
     code = session_->open_cursor(session_, "table:edge", nullptr, "append", &cursor);
     if (code != 0)
     {
-        throw std::runtime_error("");
+        throw std::runtime_error(fmt::format("write edge, begin transaction failed code:{}", code));
     }
 
     WT_ITEM key_item;
@@ -241,7 +267,7 @@ void WriterWiredTiger::write_edge(const Edge& edge)
     code = cursor->insert(cursor);
     if (code != 0)
     {
-        throw std::runtime_error("");
+        throw std::runtime_error(fmt::format("write edge, insert failed code:{}", code));
     }
 }
 
@@ -251,12 +277,11 @@ void WriterWiredTiger::write_edges(const std::vector<Edge>& edges)
     code     = session_->begin_transaction(session_, NULL);
     if (code != 0)
     {
-        throw std::runtime_error("");
+        throw std::runtime_error(fmt::format("batch write edge, begin_transaction failed code:{}", code));
     }
 
     try
     {
-        int        code   = 0;
         WT_CURSOR* cursor = nullptr;
         DEFER(if (cursor != nullptr) { cursor->close(cursor); });
 
@@ -264,7 +289,7 @@ void WriterWiredTiger::write_edges(const std::vector<Edge>& edges)
         code = session_->open_cursor(session_, "table:edge", nullptr, "append", &cursor);
         if (code != 0)
         {
-            throw std::runtime_error("");
+            throw std::runtime_error(fmt::format("batch write edge, open cursor failed code:{}", code));
         }
 
         WiredTigerEdgeStorageKey k;
@@ -283,14 +308,27 @@ void WriterWiredTiger::write_edges(const std::vector<Edge>& edges)
             code = cursor->insert(cursor);
             if (code != 0)
             {
-                throw std::runtime_error("");
+                throw std::runtime_error(fmt::format("batch write edge:{}-{}-{}-{}, insert failed code:{} , reson:{}",
+                                                     k.start_vertex_id,
+                                                     (int)k.direction,
+                                                     k.relation_type_id,
+                                                     k.end_vertex_id,
+                                                     code,
+                                                     session_->get_rollback_reason(session_)));
             }
         }
     }
+    catch (const std::runtime_error& e)
+    {
+        spdlog::error("batch write edge catch exception:{}", e.what());
+        session_->rollback_transaction(session_, NULL);
+        throw;
+    }
     catch (...)
     {
+        spdlog::error("batch write edge catch unknown exception");
         session_->rollback_transaction(session_, NULL);
-        throw std::runtime_error("");
+        throw;
     }
     code = session_->commit_transaction(session_, NULL);
     return;

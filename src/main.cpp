@@ -16,8 +16,10 @@
 
 using namespace drogon;
 
-constexpr int DEFAULT_BATCH_SIZE = 1000;
-constexpr int PORT               = 8200;
+constexpr int  DEFAULT_BATCH_SIZE = 1000;
+constexpr int  PORT               = 8200;
+constexpr int  CacheSize          = 512; // MB
+constexpr bool DefaultNeedImport  = false;
 
 static int DefaultConcurrency()
 {
@@ -41,7 +43,8 @@ struct cli_args
     int         batch_size;
     int         concurrency;
     int         port;
-    bool        need_import = false;
+    bool        need_import = DefaultNeedImport;
+    int         cache_size  = CacheSize; // MB
 };
 
 static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
@@ -60,11 +63,28 @@ static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
                                            "data_path",
                                            "input excel data path (required when need_import is true)",
                                            {"data_path"});
-    args::Flag need_import(parser, "need_import", "whether need import data (optional)", {"need_import"});
+    args::Flag                   need_import(parser,
+                           "need_import",
+                           fmt::format("whether need import data (optional, default:{})", DefaultNeedImport),
+                                             {"need_import"},
+                           DefaultNeedImport);
 
-    args::ValueFlag<int> batch_size(parser, "batch_size", "batch size (optional)", {"batch_size"});
-    args::ValueFlag<int> concurrency(parser, "concurrency", "Concurrency (optional)", {"concurrency"});
-    args::ValueFlag<int> port(parser, "port", "Port (optional)", {"port"});
+    args::ValueFlag<int> batch_size(parser,
+                                    "batch_size",
+                                    fmt::format("batch size (optional, default:{})", DEFAULT_BATCH_SIZE),
+                                    {"batch_size"},
+                                    DEFAULT_BATCH_SIZE);
+    args::ValueFlag<int> concurrency(parser,
+                                     "concurrency",
+                                     fmt::format("Concurrency (optional, default:{})", DefaultConcurrency()),
+                                     {"concurrency"},
+                                     DefaultConcurrency());
+    args::ValueFlag<int> port(parser, "port", "Port (optional)", {"port"}, PORT);
+    args::ValueFlag<int> cache_size(parser,
+                                    "cache_size",
+                                    fmt::format("WiredTiger Cache size in MB (optional, default:{})", CacheSize),
+                                    {"cache_size"},
+                                    CacheSize);
 
     try
     {
@@ -89,10 +109,14 @@ static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
                 throw args::ParseError("data_path must be provided when need_import is true.");
             }
         }
-
-        if (out_args.batch_size <= 0 || out_args.concurrency <= 0 || out_args.port <= 0)
+        if (cache_size)
         {
-            throw args::ParseError("batch_size, concurrency and port must be positive integers.");
+            out_args.cache_size = args::get(cache_size);
+        }
+
+        if (out_args.batch_size <= 0 || out_args.concurrency <= 0 || out_args.port <= 0 || out_args.cache_size <= 0)
+        {
+            throw args::ParseError("batch_size, concurrency, cache_size and port must be positive integers.");
         }
 
         return true;
@@ -161,11 +185,20 @@ ___________     .__                             .__
     }
 
     wiredtiger_initialize_databse_schema(param.database_dir);
-    if (wiredtiger_open(param.database_dir.c_str(), nullptr, "create", &conn) != 0)
+    if (wiredtiger_open(param.database_dir.c_str(),
+                        nullptr,
+                        fmt::format("create,cache_size={}MB", param.cache_size).c_str(),
+                        &conn) != 0)
     {
         spdlog::error("Failed to open WiredTiger database at {}", param.database_dir);
         return 1;
     }
+
+    spdlog::info("WiredTiger database opened at {}, cache size:{}MB, wirte edge concurrency:{} and batch size:{}",
+                 param.database_dir,
+                 param.cache_size,
+                 param.concurrency,
+                 param.batch_size);
 
     auto thread_pool = std::make_shared<ThreadPool>(param.concurrency);
 
