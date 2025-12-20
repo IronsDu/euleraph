@@ -176,8 +176,6 @@ static ReaderInterface::Ptr make_reader()
 
 int main(int argc, char** argv)
 {
-    initialize_log();
-
     const std::string logo = R"(
 ___________     .__                             .__     
 \_   _____/__ __|  |   ________________  ______ |  |__  
@@ -194,7 +192,9 @@ ___________     .__                             .__
     {
         return 1;
     }
+
     spdlog::set_level(spdlog::level::from_str(param.log_level));
+    initialize_log(spdlog::level::from_str(param.log_level));
 
     wiredtiger_initialize_databse_schema(param.database_dir);
     if (wiredtiger_open(param.database_dir.c_str(),
@@ -206,7 +206,7 @@ ___________     .__                             .__
         return 1;
     }
 
-    spdlog::info("WiredTiger database opened at {}, cache size:{}MB, wirte edge concurrency:{} and batch size:{}",
+    spdlog::info("WiredTiger database opened at {}, cache size:{}MB, wirte edge concurrency:{}, and batch size:{}",
                  param.database_dir,
                  param.cache_size,
                  param.concurrency,
