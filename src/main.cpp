@@ -21,8 +21,8 @@ constexpr int PORT               = 8200;
 
 static int DefaultConcurrency()
 {
-    unsigned n = std::thread::hardware_concurrency() * 2;
-    return (n == 0u) ? 1 : static_cast<int>(n);
+    // 目前单并发写入边,因为多个并发时会有冲突问题
+    return 1;
 }
 
 struct cli_args

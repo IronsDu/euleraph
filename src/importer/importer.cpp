@@ -209,54 +209,79 @@ void Importer::import_data(const std::string&     file_path,
 
     spdlog::info("start import edges from excel: {}", file_path);
 
-    xlnt::workbook wb;
-    wb.load(file_path);
-    auto ws        = wb.active_sheet();
-    auto writer    = wirter_interface_generator();
-    bool first_row = true;
-    int  i         = 0;
+    auto writer = wirter_interface_generator();
 
-    auto cons_edge_begin = std::chrono::steady_clock::now();
+    int                             current_excel_row_num = 0;
+    auto                            cons_edge_begin       = std::chrono::steady_clock::now();
+    bool                            first_row             = true;
+    xlnt::streaming_workbook_reader wb_streaming_reader;
+    wb_streaming_reader.open(file_path);
 
-    for (const auto& row : ws.rows(false))
+    for (auto sheet_name : wb_streaming_reader.sheet_titles())
     {
-        if (first_row)
+        wb_streaming_reader.begin_worksheet(sheet_name);
+        DEFER(wb_streaming_reader.end_worksheet(););
+
+        while (true)
         {
-            first_row = false;
-            continue;
+            EdgeRowData edgeRowData;
+            if (!wb_streaming_reader.has_cell())
+            {
+                break;
+            }
+            edgeRowData.start_pk = wb_streaming_reader.read_cell().to_string();
+
+            if (!wb_streaming_reader.has_cell())
+            {
+                break;
+            }
+            edgeRowData.start_label_type = wb_streaming_reader.read_cell().to_string();
+
+            if (!wb_streaming_reader.has_cell())
+            {
+                break;
+            }
+            edgeRowData.relation_type = wb_streaming_reader.read_cell().to_string();
+
+            if (!wb_streaming_reader.has_cell())
+            {
+                break;
+            }
+            edgeRowData.end_pk = wb_streaming_reader.read_cell().to_string();
+
+            if (!wb_streaming_reader.has_cell())
+            {
+                break;
+            }
+            edgeRowData.end_label_type = wb_streaming_reader.read_cell().to_string();
+
+            if (first_row)
+            {
+                first_row = false;
+                continue;
+            }
+
+            edgeRowData.relation_type_id    = writer->write_relation_type(edgeRowData.relation_type);
+            edgeRowData.start_label_type_id = writer->write_label_type(edgeRowData.start_label_type);
+            edgeRowData.end_label_type_id   = writer->write_label_type(edgeRowData.end_label_type);
+
+            batch_edge_row->emplace_back(std::move(edgeRowData));
+
+            if (batch_edge_row->size() >= batch_size)
+            {
+                auto t_end = std::chrono::steady_clock::now();
+                auto milliseconds =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(t_end - cons_edge_begin).count();
+                spdlog::info("cons edges  cost {} ms", milliseconds);
+
+                spdlog::info("current excel row num:{}", current_excel_row_num);
+                // TODO::先查询 这些点是否存在，对不存在的点进行分hash写入
+                // TODO::然后再写边
+                run_write_task();
+                cons_edge_begin = std::chrono::steady_clock::now();
+            }
+            current_excel_row_num++;
         }
-        if (!row[0].has_value())
-        {
-            break;
-        }
-
-        EdgeRowData edgeRowData;
-        edgeRowData.start_pk         = row[0].to_string();
-        edgeRowData.start_label_type = row[1].to_string();
-        edgeRowData.relation_type    = row[2].to_string();
-        edgeRowData.end_pk           = row[3].to_string();
-        edgeRowData.end_label_type   = row[4].to_string();
-
-        edgeRowData.relation_type_id    = writer->write_relation_type(edgeRowData.relation_type);
-        edgeRowData.start_label_type_id = writer->write_label_type(edgeRowData.start_label_type);
-        edgeRowData.end_label_type_id   = writer->write_label_type(edgeRowData.end_label_type);
-
-        batch_edge_row->emplace_back(std::move(edgeRowData));
-
-        if (batch_edge_row->size() >= batch_size)
-        {
-
-            auto t_end        = std::chrono::steady_clock::now();
-            auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - cons_edge_begin).count();
-            spdlog::info("cons edges  cost {} ms", milliseconds);
-
-            spdlog::info("current excel row num:{}", i);
-            // TODO::先查询 这些点是否存在，对不存在的点进行分hash写入
-            // TODO::然后再写边
-            run_write_task();
-            cons_edge_begin = std::chrono::steady_clock::now();
-        }
-        i++;
     }
 
     if (!batch_edge_row->empty())
