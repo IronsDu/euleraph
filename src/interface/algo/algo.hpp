@@ -18,6 +18,11 @@ struct CommonNeighborQueryParams {
     std::vector<RelationTypeId> relation_label_type_id_list; // 边标签（可选）
 };
 
+struct WCCParams {
+    std::vector<LabelTypeId> label_type_id_list; // 节点标签（可选）
+    std::vector<RelationTypeId> relation_label_type_id_list; // 边标签（可选）
+};
+
 class AlgoInterface
 {
 public:
@@ -32,6 +37,11 @@ public:
     // @param 见CommonNeighborQueryParams
     // @return 共同邻居总数
     virtual int get_common_neighbor_count(const CommonNeighborQueryParams& params, std::shared_ptr<ReaderInterface> reader) = 0;
+
+    // @brief 连通分量算法，计算连通分量，根据输入的label_type和relation_type过滤
+    // @param 见WCCParams
+    // @return 连通分量总数
+    virtual int get_wcc_count(const WCCParams& params, std::shared_ptr<ReaderInterface> reader) = 0;
 };
 
 std::shared_ptr<AlgoInterface> create_algo();

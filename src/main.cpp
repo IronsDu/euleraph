@@ -262,6 +262,12 @@ ___________     .__                             .__
                               EuleraphHttpHandle::get_one_hop_neighbors(req, std::move(callback), reader);
                           },
                           {Post});
+    app().registerHandler("/api/v1/algorithms/wcc",
+                          [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+                              auto reader = std::make_shared<OneTrxReaderWiredTiger>(conn);
+                              EuleraphHttpHandle::wcc_query(req, std::move(callback), reader);
+                          },
+                          {Post});
     app().setUploadPath(web_dir);
     app().run();
 
