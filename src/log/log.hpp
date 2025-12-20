@@ -6,7 +6,7 @@
 
 static void initialize_log()
 {
-    const std::string log_pattern = "[%H:%M:%S %z] [%^%l%$] [thread %t] %v";
+    const std::string log_pattern = "[%H:%M:%S.%3f %z] [%^%l%$] [thread %t] %v";
 
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     auto daily_sink   = std::make_shared<spdlog::sinks::daily_file_sink_mt>("logs/daily.txt", 0, 0);

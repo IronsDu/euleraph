@@ -96,3 +96,95 @@ static void play_neon_banner(const std::string logo)
     // 恢复光标
     std::cout << "\033[?25h" << std::endl;
 }
+
+class NeonArrowBar
+{
+public:
+    NeonArrowBar(const std::string& label, int total, int width = 40) : label_(label), total_(total), bar_width_(width)
+    {
+        std::cout << "\033[?25l"; // 隐藏光标
+    }
+
+    ~NeonArrowBar()
+    {
+        finish();
+    }
+
+    void update(int current, const std::string& status = "")
+    {
+        current          = std::min(current, total_);
+        float percentage = static_cast<float>(current) / total_;
+        int   pos        = static_cast<int>(bar_width_ * percentage);
+
+        std::cout << "\r"; // 回到行首
+
+        // 1. 标签与百分比 (紫色)
+        std::cout << "\033[38;2;200;100;255m" << label_ << " [" << static_cast<int>(percentage * 100) << "%] ";
+
+        // 2. 进度条左外框 (深灰色)
+        std::cout << "\033[38;5;240m[";
+
+        // 3. 绘制进度条体
+        for (int j = 0; j < bar_width_; ++j)
+        {
+            if (j < pos)
+            {
+                // 已填充路径：使用等号 '='，带有紫色渐变
+                int r = 80 + (j * 175 / bar_width_);
+                std::cout << "\033[38;2;" << r << ";0;255m=";
+            }
+            else if (j == pos && current < total_)
+            {
+                // ======= 文本箭头组合 =======
+                // 我们用 "==>" 表示箭头。
+                // 亮红色尖端 \033[1;31m
+                if (j <= bar_width_ - 3)
+                {
+                    std::cout << "\033[1;38;2;255;100;255m==\033[1;31m>\033[0m";
+                    j += 2; // 补偿长度：因为多印了两个字符
+                }
+                else
+                {
+                    // 如果接近末尾，空间不足，仅打印单个尖端
+                    std::cout << "\033[1;31m>\033[0m";
+                }
+            }
+            else
+            {
+                // 未填充空白
+                std::cout << " ";
+            }
+        }
+
+        // 4. 进度条右外框 (深灰色)
+        std::cout << "\033[38;5;240m]";
+
+        // 5. 状态信息 + 清除行末残余
+        if (!status.empty())
+        {
+            std::cout << " \033[38;2;150;150;150m" << status << "\033[K";
+        }
+        else
+        {
+            std::cout << "\033[K";
+        }
+
+        std::cout << std::flush;
+    }
+
+    void finish()
+    {
+        if (!finished_)
+        {
+            update(total_, "Done.");
+            std::cout << "\033[?25h" << std::endl; // 恢复光标并换行
+            finished_ = true;
+        }
+    }
+
+private:
+    std::string label_;
+    int         total_;
+    int         bar_width_;
+    bool        finished_ = false;
+};
