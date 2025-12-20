@@ -3,6 +3,7 @@
 #include "storage/wiredtiger_common.hpp"
 #include "storage/writer_wiredtiger.hpp"
 #include "storage/reader_wiredtiger.hpp"
+#include "storage/one_trx_reader_wiredtiger.hpp"
 
 class ut_wiredtiger_impl : public testing::Test
 {
@@ -107,4 +108,22 @@ TEST_F(ut_wiredtiger_impl, normal)
     ASSERT_EQ(a_vertex_pk.value(), "a");
     auto b_vertex_pk = reader_wiredtiger->get_vertex_pk_by_id(b_vertex_id.value());
     ASSERT_EQ(b_vertex_pk.value(), "b");
+
+    const auto check_scan_vertex_id = [&](const ReaderWiredTiger::Ptr reader) {
+        reader->scan_vertex_id([&](VertexId vertex_id, LabelTypeId label_type_id) {
+            ASSERT_TRUE(vertex_id == a_vertex_id.value() || vertex_id == b_vertex_id.value());
+            ASSERT_TRUE(label_type_id == person_label_id.value() || vertex_id == dog_label_id.value());
+            if (vertex_id == a_vertex_id.value())
+            {
+                ASSERT_EQ(label_type_id, person_label_id.value());
+            }
+            else if (vertex_id == b_vertex_id.value())
+            {
+                ASSERT_EQ(label_type_id, dog_label_id.value());
+            }
+        });
+    };
+
+    check_scan_vertex_id(std::make_shared<ReaderWiredTiger>(conn));
+    check_scan_vertex_id(std::make_shared<OneTrxReaderWiredTiger>(conn));
 }

@@ -271,6 +271,36 @@ std::optional<VertexPk> OneTrxReaderWiredTiger::get_vertex_pk_by_id(VertexId ver
     return VertexPk(vertex_pk);
 }
 
+void OneTrxReaderWiredTiger::scan_vertex_id(ReaderInterface::VertexIdCallback callback)
+{
+    // 查询中此函数不用调用太多次, 所以每次都新建游标
+    int        code   = 0;
+    WT_CURSOR* cursor = nullptr;
+    DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+    code = session_->open_cursor(session_, "table:vertex(label_type_id)", nullptr, nullptr, &cursor);
+    if (code != 0)
+    {
+        spdlog::error("scan vertex id, open cursor failed, code:{}", code);
+        return;
+    }
+    while ((code = cursor->next(cursor)) == 0)
+    {
+        VertexId vertex_id = 0;
+        if (cursor->get_key(cursor, &vertex_id) != 0)
+        {
+            spdlog::error("scan vertex id, get key failed, code:{}", code);
+            continue;
+        }
+        LabelTypeId label_type_id; // 标签类型ID
+        if (cursor->get_value(cursor, &label_type_id) != 0)
+        {
+            spdlog::error("scan vertex id, get value failed, code:{}", code);
+            continue;
+        }
+        callback(vertex_id, label_type_id);
+    }
+}
+
 std::vector<Edge> OneTrxReaderWiredTiger::get_neighbors_by_start_vertex(const VertexId&    start_vertex_id,
                                                                         const LabelTypeId& start_label_type_id,
                                                                         EdgeDirection      direction,
@@ -316,7 +346,7 @@ std::vector<Edge> OneTrxReaderWiredTiger::get_neighbors_by_start_vertex(const Ve
     {
         WT_ITEM edge_key_item;
         code = edge_cursor_->get_key(edge_cursor_, &edge_key_item);
-        LabelTypeId* end_label_type_id; // 终点标签类型ID
+        LabelTypeId end_label_type_id; // 终点标签类型ID
         code = edge_cursor_->get_value(edge_cursor_, &end_label_type_id);
 
         const auto* edge_key = reinterpret_cast<const WiredTigerEdgeStorageKey*>(edge_key_item.data);
@@ -327,7 +357,7 @@ std::vector<Edge> OneTrxReaderWiredTiger::get_neighbors_by_start_vertex(const Ve
         edge.start_vertex_id     = edge_key->start_vertex_id;
         edge.direction           = edge_key->direction;
         edge.end_vertex_id       = edge_key->end_vertex_id;
-        edge.end_label_type_id   = *end_label_type_id;
+        edge.end_label_type_id   = end_label_type_id;
 
         result_edges.push_back(edge);
     }

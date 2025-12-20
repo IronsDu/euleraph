@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <vector>
+#include <functional>
 
 #include "interface/types/types.hpp"
 
@@ -50,6 +51,11 @@ public:
     // @param vertex_id 顶点id(全局唯一)
     // @return 顶点标识, 如果不存在则返回std::nullopt
     virtual std::optional<VertexPk> get_vertex_pk_by_id(VertexId vertex_id) = 0;
+
+    using VertexIdCallback = std::function<void(VertexId, LabelTypeId)>;
+    // @brief 遍历所有顶点ID
+    // @param callback 回调函数, 每遍历到一个顶点ID就调用该函数
+    virtual void scan_vertex_id(VertexIdCallback callback) = 0;
 
     // @brief 根据起始顶点ID获取邻居边
     // @param start_vertex_id 起始顶点ID
