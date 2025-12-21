@@ -431,7 +431,117 @@ int AlgoImpl::get_wcc_count(const WCCParams& params, std::shared_ptr<ReaderInter
 
 int AlgoImpl::get_subgraph_matching_count(const SubgraphMatchingParams& params, std::shared_ptr<ReaderInterface> reader)
 {
-    return 0;
+    // Step 1: 提取所有模式节点的名字
+    std::vector<std::string> var_names;
+    for (const auto& kv : params.nodes_pattern_map)
+    {
+        var_names.push_back(kv.first);
+    }
+
+    // Step 2: 构建 vid -> label 映射 + 每个变量的候选集
+    std::unordered_map<VertexId, LabelTypeId>              vertex_labels;
+    std::unordered_map<std::string, std::vector<VertexId>> candidates;
+
+    // 初始化候选集
+    for (const auto& var : var_names)
+    {
+        candidates[var] = {};
+    }
+
+    // 一次全图扫描，同时记录标签和填充候选点
+    reader->scan_vertex_id([&](VertexId vid, LabelTypeId vlabel) {
+        vertex_labels[vid] = vlabel;
+        for (const auto& [var, required_labels] : params.nodes_pattern_map)
+        {
+            for (LabelTypeId req : required_labels)
+            {
+                if (vlabel == req)
+                {
+                    candidates[var].push_back(vid);
+                    break; // 匹配一个即可
+                }
+            }
+        }
+    });
+
+    // Step 3: 按候选集大小排序（MRV：最小剩余值优先）
+    std::sort(var_names.begin(), var_names.end(), [&candidates](const std::string& a, const std::string& b) {
+        return candidates.at(a).size() < candidates.at(b).size();
+    });
+
+    // Step 4: 回溯搜索
+    long long                                 total = 0;
+    std::unordered_map<std::string, VertexId> current_mapping;
+
+    // 使用 std::function 支持递归 lambda
+    std::function<void(int)> backtrack = [&](int depth) {
+        if (depth == static_cast<int>(var_names.size()))
+        {
+            total++;
+            return;
+        }
+
+        const std::string& var = var_names[depth];
+        for (VertexId vid : candidates.at(var))
+        {
+            current_mapping[var] = vid;
+
+            // 一致性检查：验证当前映射是否满足所有已完整映射的边
+            bool consistent = true;
+            for (const auto& edge : params.edges_pattern_list)
+            {
+                auto src_it = current_mapping.find(edge.source_node);
+                auto tgt_it = current_mapping.find(edge.target_node);
+
+                if (src_it == current_mapping.end() || tgt_it == current_mapping.end())
+                {
+                    continue; // 边未完全映射，跳过
+                }
+
+                VertexId    u       = src_it->second;
+                VertexId    v       = tgt_it->second;
+                LabelTypeId u_label = vertex_labels.at(u);
+                LabelTypeId v_label = vertex_labels.at(v);
+
+                // 查询是否存在匹配的关系边, 我们的 get_neighbors 只查 OUT
+                bool edge_found = false;
+                for (RelationTypeId rel_id : edge.relation_type_id_list)
+                {
+                    auto neighbors =
+                        reader->get_neighbors_by_start_vertex(u, vertex_labels.at(u), edge.direction, rel_id);
+
+                    for (const auto& e : neighbors)
+                    {
+                        if (e.end_vertex_id == v)
+                        {
+                            edge_found = true;
+                            break;
+                        }
+                    }
+                    if (edge_found)
+                        break;
+                }
+
+                if (!edge_found)
+                {
+                    consistent = false;
+                    break;
+                }
+            }
+
+            if (consistent)
+            {
+                backtrack(depth + 1);
+            }
+
+            current_mapping.erase(var); // 回溯
+        }
+    };
+
+    // 启动回溯
+    backtrack(0);
+
+    return total;
 }
 
 std::shared_ptr<AlgoInterface> create_algo()
