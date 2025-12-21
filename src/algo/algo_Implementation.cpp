@@ -8,6 +8,11 @@
 #include <unordered_set>
 #include <bits/stdc++.h>
 
+#include <string>
+#include <unordered_map>
+#include <algorithm>
+#include <functional>
+
 uint64_t AlgoImpl::get_k_hop_neighbor_count(const KHopQueryParams&           params,
                                             std::shared_ptr<ReaderInterface> reader,
                                             WT_CONNECTION*                   conn)
@@ -431,26 +436,18 @@ int AlgoImpl::get_wcc_count(const WCCParams& params, std::shared_ptr<ReaderInter
 
 int AlgoImpl::get_subgraph_matching_count(const SubgraphMatchingParams& params, std::shared_ptr<ReaderInterface> reader)
 {
-    // Step 1: 提取所有模式节点的名字
+    // 1. 提取变量名
     std::vector<std::string> var_names;
     for (const auto& kv : params.nodes_pattern_map)
     {
         var_names.push_back(kv.first);
     }
 
-    // Step 2: 构建 vid -> label 映射 + 每个变量的候选集
-    std::unordered_map<VertexId, LabelTypeId>              vertex_labels;
     std::unordered_map<std::string, std::vector<VertexId>> candidates;
+    std::unordered_map<VertexId, LabelTypeId>              candidate_labels;
 
-    // 初始化候选集
-    for (const auto& var : var_names)
-    {
-        candidates[var] = {};
-    }
-
-    // 一次全图扫描，同时记录标签和填充候选点
+    // 2. 候选集过滤
     reader->scan_vertex_id([&](VertexId vid, LabelTypeId vlabel) {
-        vertex_labels[vid] = vlabel;
         for (const auto& [var, required_labels] : params.nodes_pattern_map)
         {
             for (LabelTypeId req : required_labels)
@@ -458,22 +455,54 @@ int AlgoImpl::get_subgraph_matching_count(const SubgraphMatchingParams& params, 
                 if (vlabel == req)
                 {
                     candidates[var].push_back(vid);
-                    break; // 匹配一个即可
+                    candidate_labels[vid] = vlabel;
+                    break;
                 }
             }
         }
     });
 
-    // Step 3: 按候选集大小排序（MRV：最小剩余值优先）
-    std::sort(var_names.begin(), var_names.end(), [&candidates](const std::string& a, const std::string& b) {
-        return candidates.at(a).size() < candidates.at(b).size();
+    // 3. MRV 排序：先匹配候选集小的节点以缩减搜索空间
+    std::sort(var_names.begin(), var_names.end(), [&](const std::string& a, const std::string& b) {
+        return candidates[a].size() < candidates[b].size();
     });
 
-    // Step 4: 回溯搜索
+    std::unordered_map<std::string, int> var_to_idx;
+    for (int i = 0; i < (int)var_names.size(); ++i)
+    {
+        var_to_idx[var_names[i]] = i;
+    }
+
+    // 4. 预处理：每个深度需要验证的边
+    struct EdgeTask
+    {
+        std::string other_var;
+        PatternEdge pattern;
+        bool        is_src;
+    };
+    std::vector<std::vector<EdgeTask>> edges_at_depth(var_names.size());
+
+    for (const auto& edge : params.edges_pattern_list)
+    {
+        int idx1    = var_to_idx[edge.source_node];
+        int idx2    = var_to_idx[edge.target_node];
+        int max_idx = std::max(idx1, idx2);
+
+        // 标记当前节点在边中的角色，确保调用 get_neighbors 时 u 是起点，v 是终点
+        if (idx1 == max_idx)
+        {
+            edges_at_depth[max_idx].push_back({edge.target_node, edge, true});
+        }
+        else
+        {
+            edges_at_depth[max_idx].push_back({edge.source_node, edge, false});
+        }
+    }
+
+    // 5. 回溯搜索 (同态逻辑)
     long long                                 total = 0;
     std::unordered_map<std::string, VertexId> current_mapping;
 
-    // 使用 std::function 支持递归 lambda
     std::function<void(int)> backtrack = [&](int depth) {
         if (depth == static_cast<int>(var_names.size()))
         {
@@ -482,37 +511,28 @@ int AlgoImpl::get_subgraph_matching_count(const SubgraphMatchingParams& params, 
         }
 
         const std::string& var = var_names[depth];
-        for (VertexId vid : candidates.at(var))
+        for (VertexId vid : candidates[var])
         {
-            current_mapping[var] = vid;
+            // 【注意】这里删除了 used_vids.find 检查
+            // 子图同态允许不同的 var 映射到同一个物理 vid
 
-            // 一致性检查：验证当前映射是否满足所有已完整映射的边
             bool consistent = true;
-            for (const auto& edge : params.edges_pattern_list)
+            for (const auto& task : edges_at_depth[depth])
             {
-                auto src_it = current_mapping.find(edge.source_node);
-                auto tgt_it = current_mapping.find(edge.target_node);
+                // 确定物理边起点 u 和终点 v
+                VertexId u = task.is_src ? vid : current_mapping[task.other_var];
+                VertexId v = task.is_src ? current_mapping[task.other_var] : vid;
 
-                if (src_it == current_mapping.end() || tgt_it == current_mapping.end())
-                {
-                    continue; // 边未完全映射，跳过
-                }
-
-                VertexId    u       = src_it->second;
-                VertexId    v       = tgt_it->second;
-                LabelTypeId u_label = vertex_labels.at(u);
-                LabelTypeId v_label = vertex_labels.at(v);
-
-                // 查询是否存在匹配的关系边, 我们的 get_neighbors 只查 OUT
                 bool edge_found = false;
-                for (RelationTypeId rel_id : edge.relation_type_id_list)
+                for (RelationTypeId rel_id : task.pattern.relation_type_id_list)
                 {
+                    // 仅支持 OUT 的 get_neighbors 调用逻辑
                     auto neighbors =
-                        reader->get_neighbors_by_start_vertex(u, vertex_labels.at(u), edge.direction, rel_id);
+                        reader->get_neighbors_by_start_vertex(u, candidate_labels[u], task.pattern.direction, rel_id);
 
-                    for (const auto& e : neighbors)
+                    for (const auto& neighbor : neighbors)
                     {
-                        if (e.end_vertex_id == v)
+                        if (neighbor.end_vertex_id == v)
                         {
                             edge_found = true;
                             break;
@@ -531,17 +551,14 @@ int AlgoImpl::get_subgraph_matching_count(const SubgraphMatchingParams& params, 
 
             if (consistent)
             {
+                current_mapping[var] = vid;
                 backtrack(depth + 1);
             }
-
-            current_mapping.erase(var); // 回溯
         }
     };
 
-    // 启动回溯
     backtrack(0);
-
-    return total;
+    return static_cast<int>(total);
 }
 
 std::shared_ptr<AlgoInterface> create_algo()
