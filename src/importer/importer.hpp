@@ -22,5 +22,7 @@ public:
                      int                    batch_size,
                      WriterInterfaceFactory wirter_interface_generator,
                      ReaderInterfaceFactory reader_interface_factory,
+                     std::function<void()>  release_writer,
+                     std::function<void()>  release_reader,
                      std::optional<int64_t> csv_row_num);
 };

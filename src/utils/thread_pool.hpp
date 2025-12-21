@@ -22,7 +22,8 @@ public:
     using Ptr = std::shared_ptr<ThreadPool>;
 
 public:
-    ThreadPool(size_t numThreads) : stop_(false)
+    ThreadPool(size_t numThreads, std::optional<std::function<void()>> cb = std::nullopt)
+        : stop_(false), work_exit_callback_(cb)
     {
         if (numThreads == 0)
         {
@@ -78,10 +79,15 @@ private:
 
             task();
         }
+        if (work_exit_callback_)
+        {
+            work_exit_callback_.value();
+        }
     }
 
 private:
-    std::vector<std::thread> workers_;
+    std::vector<std::thread>             workers_;
+    std::optional<std::function<void()>> work_exit_callback_;
 
     std::queue<std::function<void()>> tasks_;
     std::mutex                        tasks_mutex_;

@@ -113,7 +113,7 @@ typedef struct adj_count_vid_info
 
 typedef struct parallel_adj_count_query_level_data
 {
-    QueryArg* query_arg;
+    const QueryArg* query_arg;
 
     std::shared_ptr<ThreadPool> thread_pool;
 
@@ -271,6 +271,11 @@ static ReaderInterface::Ptr       make_adj_query_reader(WT_CONNECTION* conn)
         adj_query_reader = std::make_shared<OneTrxReaderWiredTiger>(conn);
     }
     return adj_query_reader;
+}
+
+static void release_adj_query_reader()
+{
+    adj_query_reader = nullptr;
 }
 
 // 表示某个子任务完成。vid_array为其输出的顶点结果，vid_array_num 为顶点个数。hash_table_index
@@ -544,7 +549,7 @@ static t_parallel_adj_count_query_level_data* create_parallel_adj_count_query_le
     level_data->vertext_counter = 0;
     level_data->total_level_num = query_arg->k;
 
-    level_data->thread_pool = std::make_shared<ThreadPool>(parallel_num);
+    level_data->thread_pool = std::make_shared<ThreadPool>(parallel_num, []() { release_adj_query_reader(); });
 
     return level_data;
 }

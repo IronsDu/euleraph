@@ -222,6 +222,8 @@ void Importer::import_data(const std::string&     file_path,
                            int                    batch_size,
                            WriterInterfaceFactory wirter_interface_generator,
                            ReaderInterfaceFactory reader_interface_factory,
+                           std::function<void()>  release_writer,
+                           std::function<void()>  release_reader,
                            std::optional<int64_t> csv_row_num)
 {
     const auto t_begin = std::chrono::steady_clock::now();
@@ -231,14 +233,17 @@ void Importer::import_data(const std::string&     file_path,
 
     // 写入的第一阶段任务的线程池，必须为一个工作线程
     // 它负责解决这一批边中的所有点
-    auto write_first_step_thread_pool = std::make_shared<ThreadPool>(1);
+    auto write_first_step_thread_pool = std::make_shared<ThreadPool>(1, [=]() {
+        release_writer();
+        release_reader();
+    });
     // 用于控制写入任务并发数的信号量(这不是实际写入边的任务控制), 现在必须为1,
     // 此任务里会写没有写入过的点，让分配写入边的任务。
     const auto control_write_first_step = std::make_shared<std::counting_semaphore<>>((1));
 
     // 实际写入最终的边的线程池
     const ThreadPool::Ptr real_write_edge_thread_pool =
-        std::make_shared<ThreadPool>(write_edge_thread_pool_concurrency_num);
+        std::make_shared<ThreadPool>(write_edge_thread_pool_concurrency_num, [=]() { release_writer(); });
     // 控制实际写入最终的边的任务并发数
     const auto control_real_write_edge =
         std::make_shared<std::counting_semaphore<>>(write_edge_thread_pool_concurrency_num);
