@@ -41,9 +41,9 @@ cmake --build build -j
 | --batch_size <int> | ❌ | 1000 | 导入批大小 |
 | --concurrency <int> | ❌ | 1 | 导入并发（目前建议保持 1） |
 | --port <int> | ❌ | 8200 | HTTP 端口 |
-| --cache_size <int> | ❌ | 2048 | WiredTiger cache（MB） |
+| --cache_size <int> | ❌ | 5*1024 | WiredTiger cache（MB） |
 | --log_level <str> | ❌ | info | spdlog 日志级别 |
-| --csv_row_num <int> | ❌ | all | 限制导入行数（>0） |
+| --csv_row_num <int> | ❌ | 空 | 如果指定了此参数，则不需要程序计算csv数据行数。（ 用于进度显示）（>0）。 |
 
 > 注意：仓库中 `run.sh` 的参数示例（`-f/--db/--rebuild`）与当前 `main.cpp` CLI 参数**不一致**。  
 > 以 `src/main.cpp` 的 `parse_cli_args()` 为准。
@@ -53,7 +53,7 @@ cmake --build build -j
 ## 4. 启动示例
 ### 4.1 首次启动（初始化 + 导入 + 启动服务）
 ```bash
-./build/euleraph   --database_dir ./euleraph_db   --need_import   --data_path ./test/data/sample_data.xlsx   --batch_size 1000   --concurrency 1   --port 8200   --cache_size 2048   --log_level info
+./build/euleraph   --database_dir ./euleraph_db   --need_import   --data_path ./test/data/sample_data.xlsx   --batch_size 1000   --concurrency 1   --port 8200   --cache_size 5120   --log_level info
 ```
 
 ### 4.2 仅启动服务（复用已导入数据库）
