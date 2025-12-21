@@ -20,7 +20,7 @@ static void initialize_log(spdlog::level::level_enum log_level = spdlog::level::
 
     auto logger = std::make_shared<spdlog::logger>("multi_sink", sinks.begin(), sinks.end());
     spdlog::register_logger(logger);
-    logger->set_level(spdlog::level::debug);
+    logger->set_level(log_level);
 
     spdlog::set_default_logger(logger);
 }

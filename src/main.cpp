@@ -243,8 +243,10 @@ ___________     .__                             .__
         return 1;
     }
 
-    spdlog::set_level(spdlog::level::from_str(param.log_level));
     initialize_log(spdlog::level::from_str(param.log_level));
+
+    // 每秒钟刷新日志, 避免文件日志由于缓存到OS而许久没有刷新到磁盘
+    spdlog::flush_every(std::chrono::seconds(1));
 
     wiredtiger_initialize_databse_schema(param.database_dir);
     if (wiredtiger_open(param.database_dir.c_str(),
@@ -252,11 +254,11 @@ ___________     .__                             .__
                         fmt::format("create,cache_size={}MB", param.cache_size).c_str(),
                         &conn) != 0)
     {
-        spdlog::error("Failed to open WiredTiger database at {}", param.database_dir);
+        spdlog::error("Failed to open euleraph database at {}", param.database_dir);
         return 1;
     }
 
-    spdlog::info("WiredTiger database opened at {}, cache size:{}MB, wirte edge concurrency:{}, and batch size:{}",
+    spdlog::info("Euleraph database opened at {}, cache size:{}MB, wirte edge concurrency:{}, and batch size:{}",
                  param.database_dir,
                  param.cache_size,
                  param.concurrency,
