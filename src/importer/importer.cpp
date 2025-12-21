@@ -377,23 +377,32 @@ void Importer::import_data(const std::string&     file_path,
 
             NeonArrowBar bar("IMPORT", line_count, t_begin, 70);
 
-            auto last_value = writed_edges_num->load();
+            auto last_value      = writed_edges_num->load();
+            auto last_value_time = std::chrono::steady_clock::now();
+
             while (!writed_completed.load())
             {
+                // 每100ms检查一下已完成数量是否存在变化
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                auto new_value = writed_edges_num->load();
+                const auto new_value = writed_edges_num->load();
                 if (new_value > last_value)
                 {
                     const auto current_time = std::chrono::steady_clock::now();
-                    const auto seconds =
+                    // 目前总共耗时秒数
+                    const auto total_seconds =
                         std::chrono::duration_cast<std::chrono::seconds>(current_time - t_begin).count();
+
+                    // 上次变化到现在耗时多少毫秒
+                    const auto last_diff_mill =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(current_time - last_value_time).count();
 
                     bar.update(new_value,
                                fmt::format("Loading... {}s, complete:{}, rt speed:{}/s",
-                                           seconds,
+                                           total_seconds,
                                            new_value,
-                                           (new_value - last_value) * 10));
-                    last_value = new_value;
+                                           (new_value - last_value) * 1000 / last_diff_mill));
+                    last_value_time = current_time;
+                    last_value      = new_value;
                 }
             }
         }).detach();
