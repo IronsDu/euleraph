@@ -430,7 +430,7 @@ std::optional<WCCParams> parse_wcc_params(const Json::Value& jsonBody, std::shar
             auto label_type_id = reader->get_label_type_id(item.asString());
             if (!label_type_id)
             {
-                spdlog::error("Relation label not found:{}", item.asString());
+                spdlog::error("label not found:{}", item.asString());
                 return std::nullopt;
             }
             params.label_type_id_list.push_back(*label_type_id);
