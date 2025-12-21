@@ -8,6 +8,7 @@
 
 #include "utils/gdm_array.h"
 #include "utils/wait_group.hpp"
+#include "utils/thread_pool.hpp"
 
 using t_uint64 = uint64_t;
 
@@ -112,7 +113,9 @@ typedef struct adj_count_vid_info
 
 typedef struct parallel_adj_count_query_level_data
 {
-    QueryArg* query_arg;
+    const QueryArg* query_arg;
+
+    std::shared_ptr<ThreadPool> thread_pool;
 
     std::counting_semaphore<>* semaphore; // 控制并发邻接任务线程总数的信号量，避免同时任务太多，导致OOM
     EdgeDirection              direction;
@@ -178,7 +181,7 @@ static void start_one_parallel_adj_count_sub_task_thread(t_parallel_adj_count_qu
     next_level_data->semaphore->acquire();
     next_level_data->task_wg->add();
 
-    std::thread([arg]() { parallel_adj_count_sub_task_thread(arg); }).detach();
+    next_level_data->thread_pool->enqueue([arg]() { parallel_adj_count_sub_task_thread(arg); });
 }
 
 // 需要去重顶点的子任务完成函数。vid_array为其输出的顶点结果，vid_array_num 为顶点个数。hash_table_index
@@ -270,6 +273,11 @@ static ReaderInterface::Ptr       make_adj_query_reader(WT_CONNECTION* conn)
     return adj_query_reader;
 }
 
+static void release_adj_query_reader()
+{
+    adj_query_reader = nullptr;
+}
+
 // 表示某个子任务完成。vid_array为其输出的顶点结果，vid_array_num 为顶点个数。hash_table_index
 // 为这一批结果对应的hash table在vid_hash_table数组中的索引。
 // vid_array
@@ -344,8 +352,7 @@ static void execute_parallel_adj_count_sub_task(t_parallel_adj_count_query_level
         }
     }
 
-    // TODO::考虑是否换成TLS
-    auto reader = std::make_shared<OneTrxReaderWiredTiger>(level_data->query_arg->conn);
+    auto reader = make_adj_query_reader(level_data->query_arg->conn);
 
     const auto& relation_type_id_list = level_data->query_arg->relation_type_id_list;
     const auto& label_type_id_list    = level_data->query_arg->end_label_type_id_list;
@@ -540,7 +547,9 @@ static t_parallel_adj_count_query_level_data* create_parallel_adj_count_query_le
     level_data->next_level_data   = NULL;
 
     level_data->vertext_counter = 0;
-    level_data->total_level_num = 0;
+    level_data->total_level_num = query_arg->k;
+
+    level_data->thread_pool = std::make_shared<ThreadPool>(parallel_num, []() { release_adj_query_reader(); });
 
     return level_data;
 }
@@ -559,7 +568,6 @@ static t_parallel_adj_count_query_level_data* create_multi_level_list(QueryArg* 
     t_parallel_adj_count_query_level_data* last_level_data = root_level_data;
     int                                    i               = 0;
 
-    root_level_data->total_level_num = query_arg->k;
     // 创建下面几层的leve data
     for (; i < query_arg->k; i++)
     {
@@ -575,7 +583,6 @@ static t_parallel_adj_count_query_level_data* create_multi_level_list(QueryArg* 
         }
         level_data->parent_level_data = last_level_data;
         level_data->direction         = query_arg->direction;
-        level_data->total_level_num   = query_arg->k;
 
         last_level_data = level_data;
     }

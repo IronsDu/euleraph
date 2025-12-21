@@ -178,6 +178,11 @@ static WriterInterface::Ptr       make_writer()
     }
     return writer;
 }
+static void release_writer()
+{
+    writer = nullptr;
+}
+
 static ReaderInterface::Ptr make_reader()
 {
     if (!reader)
@@ -185,6 +190,11 @@ static ReaderInterface::Ptr make_reader()
         reader = std::make_shared<ReaderWiredTiger>(conn);
     }
     return reader;
+}
+
+static void release_reader()
+{
+    reader = nullptr;
 }
 
 int main(int argc, char** argv)
@@ -225,8 +235,6 @@ ___________     .__                             .__
                  param.concurrency,
                  param.batch_size);
 
-    auto thread_pool = std::make_shared<ThreadPool>(param.concurrency);
-
     if (param.need_import)
     {
         try
@@ -237,6 +245,8 @@ ___________     .__                             .__
                                  param.batch_size,
                                  make_writer,
                                  make_reader,
+                                 release_writer,
+                                 release_reader,
                                  param.csv_row_num);
 
             // 创建数据导入后的检查点，避免重启后数据丢失
