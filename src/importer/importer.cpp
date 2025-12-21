@@ -388,7 +388,11 @@ void Importer::import_data(const std::string&     file_path,
                     const auto seconds =
                         std::chrono::duration_cast<std::chrono::seconds>(current_time - t_begin).count();
 
-                    bar.update(new_value, fmt::format("Loading... {}s, {}", seconds, new_value));
+                    bar.update(new_value,
+                               fmt::format("Loading... {}s, complete:{}, rt speed:{}/s",
+                                           seconds,
+                                           new_value,
+                                           (new_value - last_value) * 10));
                     last_value = new_value;
                 }
             }
