@@ -29,6 +29,15 @@
 - `value_format=S`：`name`（label 名称）
 - `columns=(id,name)`
 
+---
+
+| 字段名         | 类型      | 说明           |
+| -------------- | --------- | -------------- |
+| id             | int64     | label_type_id（主键，自增） |
+| name           | string    | 标签名称，唯一（索引) |
+
+---
+
 **索引**
 - `index:label_type:name_pk_index`：以 `name` 建索引（实现中视作唯一）
 
@@ -47,6 +56,15 @@
 - `value_format=S`：`name`
 - `columns=(id,name)`
 
+----
+
+| 字段名         | 类型      | 说明           |
+| -------------- | --------- | -------------- |
+| id             | int64     | relation_type_id（主键，自增） |
+| name           | string    | 关系类型名称，唯一（索引) |
+
+---
+
 **索引**
 - `index:relation_type:name_pk_index`：以 `name` 建索引（实现中视作唯一）
 
@@ -60,6 +78,17 @@
 - `key_format=r`：record number（即 `VertexId`）
 - `value_format=QS`：`(label_type_id, vertex_ident)`
 - `columns=(id,label_type_id,vertex_ident)`
+
+---
+
+| 字段名         | 类型      | 说明           |
+| -------------- | --------- | -------------- |
+| id             | int64     | vertex_id（主键，自增） |
+| label_type_id  | int64     | 标签类型ID     |
+| vertex_ident             | string    | 顶点唯一标识 (索引)  |
+
+---
+
 
 **索引**
 - `index:vertex:vertex_ident_pk_index`：按 `vertex_ident` 建索引（实现中视作唯一）
@@ -82,6 +111,17 @@
 - `value_format=Q`：`end_label_type_id`
 - `columns=(edge_key,end_label_type_id)`
 
+---
+
+| 字段名         | 类型      | 说明           |
+| -------------- | --------- | -------------- |
+| edge_key| binary truct     | 边的key         |
+| end_label_type_id      | int       | 终点标签类型id         |
+
+> `edge_key` 的结构见下文
+
+---
+
 ### 5.1 edge_key 编码：WiredTigerEdgeStorageKey
 定义在 `src/storage/wiredtiger_common.hpp`，并强制 1 字节对齐：
 - `start_vertex_id` (VertexId)
@@ -89,7 +129,17 @@
 - `relation_type_id` (RelationTypeId)
 - `end_vertex_id` (VertexId)
 
-`sizeof(WiredTigerEdgeStorageKey) == 25`
+---
+
+| 字段名         | 类型      | 说明           |
+| -------------- | --------- | -------------- |
+| start_vertex_id| int64     | 起点ID         |
+| direction      | int       | 边方向         |
+| relation_type_id| int64    | 关系类型ID     |
+| end_vertex_id  | int64     | 终点ID         |
+
+---
+
 
 ### 5.2 查询友好性
 通过 key 的字段顺序，可以高效支持：
