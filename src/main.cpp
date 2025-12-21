@@ -13,6 +13,8 @@
 #include "utils/thread_pool.hpp"
 #include "utils/gaudy.hpp"
 #include "log/log.hpp"
+#include "utils/wait_group.hpp"
+#include "utils/defer.hpp"
 
 using namespace drogon;
 
@@ -197,6 +199,31 @@ static void release_reader()
     reader = nullptr;
 }
 
+static void create_checkpoint()
+{
+    do
+    {
+        // 创建数据导入后的检查点，避免重启后数据丢失
+        WT_SESSION* session;
+        int         code = conn->open_session(conn, nullptr, nullptr, &session);
+        if (code != 0)
+        {
+            spdlog::error("Failed to open_session, code is:{}", code);
+            break;
+        }
+
+        DEFER(session->close(session, nullptr));
+        code = session->checkpoint(session, nullptr);
+        if (code != 0)
+        {
+            spdlog::error("Failed to create checkpoint, code is:{}", code);
+            break;
+        }
+
+        spdlog::info("checkpoint created.");
+    } while (0);
+}
+
 int main(int argc, char** argv)
 {
     const std::string logo = R"(
@@ -239,6 +266,26 @@ ___________     .__                             .__
     {
         try
         {
+            std::atomic_bool import_completed = false;
+            WaitGroup        wg;
+            wg.add();
+
+            // 定时创建检查点线程
+            std::thread([&]() {
+                DEFER(wg.done(););
+
+                int counter = 0;
+                while (!import_completed.load())
+                {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    counter++;
+                    if (counter >= 60)
+                    {
+                        create_checkpoint();
+                        counter = 0;
+                    }
+                }
+            }).detach();
             Importer importer;
             importer.import_data(param.data_path,
                                  param.concurrency,
@@ -248,17 +295,11 @@ ___________     .__                             .__
                                  release_writer,
                                  release_reader,
                                  param.csv_row_num);
+            import_completed.store(true);
+            wg.wait();
 
             // 创建数据导入后的检查点，避免重启后数据丢失
-            WT_SESSION* session_;
-            conn->open_session(conn, nullptr, nullptr, &session_);
-            int code = session_->checkpoint(session_, nullptr);
-            if (code != 0)
-            {
-                spdlog::error("Failed to create checkpoint after data import");
-                return 1;
-            }
-            session_->close(session_, nullptr);
+            create_checkpoint();
         }
         catch (const std::exception& e)
         {
