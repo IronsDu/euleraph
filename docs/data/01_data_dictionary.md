@@ -16,7 +16,7 @@
 - `LabelTypeId`：label 类型的内部 id（uint64）
 - `RelationTypeId`：relation 类型内部 id（uint64）
 - `VertexId`：顶点内部 id（uint64）
-- `VertexPk / vertex_ident`：顶点外部标识（string）
+- `VertexPk / vertex_ident`：顶点外部标识（string），这是用户侧看到的顶点id
 
 ---
 
