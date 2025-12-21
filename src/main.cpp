@@ -20,7 +20,7 @@ using namespace drogon;
 
 constexpr int     DEFAULT_BATCH_SIZE = 1000;
 constexpr int     PORT               = 8200;
-constexpr int     CacheSize          = 2048; // MB
+constexpr int     CacheSize          = 1024 * 5; // MB
 constexpr bool    DefaultNeedImport  = false;
 const std::string DefaultLogLevel    = std::string("info");
 
