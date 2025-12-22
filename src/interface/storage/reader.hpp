@@ -52,6 +52,10 @@ public:
     // @return 顶点标识, 如果不存在则返回std::nullopt
     virtual std::optional<VertexPk> get_vertex_pk_by_id(VertexId vertex_id) = 0;
 
+    // @brief 根据顶点id获取其标签类型ID
+    // @param vertex_id 顶点id(全局唯一)
+    virtual std::optional<LabelTypeId> get_label_id_by_vertex_id(VertexId vertex_id) = 0;
+
     using VertexIdCallback = std::function<void(VertexId, LabelTypeId)>;
     // @brief 遍历所有顶点ID
     // @param callback 回调函数, 每遍历到一个顶点ID就调用该函数

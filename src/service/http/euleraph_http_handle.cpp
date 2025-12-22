@@ -73,13 +73,15 @@ void EuleraphHttpHandle::get_one_hop_neighbors(const HttpRequestPtr&            
     }
 
     // TODO::label type id无需指定
-    const auto dummy_start_label_id = 1;
-    auto       start_vertex_id      = reader->get_vertex_id(dummy_start_label_id, start_vertex_pk);
+    auto start_label_id  = 1;
+    auto start_vertex_id = reader->get_vertex_id(start_label_id, start_vertex_pk);
     if (!start_vertex_id)
     {
         reply_error_msg(fmt::format("not found vertex:{}", start_vertex_pk));
         return;
     }
+    // 重新根据顶点ID获取标签类型ID，确保正确
+    start_label_id = reader->get_label_id_by_vertex_id(start_vertex_id.value()).value();
 
     Json::Value data_json;
 
@@ -101,7 +103,7 @@ void EuleraphHttpHandle::get_one_hop_neighbors(const HttpRequestPtr&            
     for (const auto& direction : real_direction_array)
     {
         const auto neighbors_edges = reader->get_neighbors_by_start_vertex(start_vertex_id.value(),
-                                                                           dummy_start_label_id,
+                                                                           start_label_id,
                                                                            static_cast<EdgeDirection>(direction),
                                                                            relation_type_id);
 
@@ -525,11 +527,16 @@ void EuleraphHttpHandle::wcc_query(const HttpRequestPtr&                        
 
 EdgeDirection get_direction(std::string direction)
 {
-    if (direction == "IN") {
+    if (direction == "IN")
+    {
         return EdgeDirection::INCOMING;
-    } else if (direction == "OUT") {
+    }
+    else if (direction == "OUT")
+    {
         return EdgeDirection::OUTGOING;
-    } else {
+    }
+    else
+    {
         spdlog::info("direction must be 'IN' or 'OUT'");
         return EdgeDirection::UNDIRECTED;
     }
@@ -582,7 +589,7 @@ std::optional<SubgraphMatchingParams> parse_subgraph_matching_params(const Json:
         }
         edge_pattern.source_node = edge["source"].asString();
         edge_pattern.target_node = edge["target"].asString();
-        edge_pattern.direction = get_direction(edge["direction"].asString());
+        edge_pattern.direction   = get_direction(edge["direction"].asString());
         params.edges_pattern_list.push_back(edge_pattern);
     }
     return params;

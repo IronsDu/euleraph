@@ -248,6 +248,35 @@ std::optional<VertexPk> ReaderWiredTiger::get_vertex_pk_by_id(VertexId vertex_id
     return VertexPk(vertex_pk);
 }
 
+std::optional<LabelTypeId> ReaderWiredTiger::get_label_id_by_vertex_id(VertexId vertex_id)
+{
+    int        code   = 0;
+    WT_CURSOR* cursor = nullptr;
+    DEFER(if (cursor != nullptr) { cursor->close(cursor); });
+
+    code = session_->open_cursor(session_, "table:vertex(label_type_id)", nullptr, nullptr, &cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    cursor->set_key(cursor, vertex_id);
+    code = cursor->search(cursor);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    LabelTypeId label_type_id;
+    code = cursor->get_value(cursor, &label_type_id);
+    if (code != 0)
+    {
+        return std::nullopt;
+    }
+
+    return LabelTypeId(label_type_id);
+}
+
 void ReaderWiredTiger::scan_vertex_id(ReaderInterface::VertexIdCallback callback)
 {
     int        code   = 0;

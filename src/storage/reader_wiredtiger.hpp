@@ -18,8 +18,9 @@ public:
 
     std::vector<std::optional<VertexId>> get_vertex_ids(const std::vector<VertexPk>& vertex_pks) override;
     // 目前label_type_id参数没有使用, 因为比赛数据里顶点标识是全局唯一的
-    std::optional<VertexId> get_vertex_id(const LabelTypeId& label_type_id, const VertexPk& vertex_pk) override;
-    std::optional<VertexPk> get_vertex_pk_by_id(VertexId vertex_id) override;
+    std::optional<VertexId>    get_vertex_id(const LabelTypeId& label_type_id, const VertexPk& vertex_pk) override;
+    std::optional<VertexPk>    get_vertex_pk_by_id(VertexId vertex_id) override;
+    std::optional<LabelTypeId> get_label_id_by_vertex_id(VertexId vertex_id) override;
 
     void scan_vertex_id(ReaderInterface::VertexIdCallback callback) override;
 
