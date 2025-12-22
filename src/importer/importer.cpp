@@ -377,32 +377,41 @@ void Importer::import_data(const std::string&     file_path,
 
             NeonArrowBar bar("IMPORT", line_count, t_begin, 70);
 
-            auto last_value      = writed_edges_num->load();
-            auto last_value_time = std::chrono::steady_clock::now();
+            // 100ms前的已完成值
+            auto last_100ms_value = writed_edges_num->load();
+            // 上一秒的已完成值和时间点
+            auto last_second_value = writed_edges_num->load();
+            auto last_second_time  = std::chrono::steady_clock::now();
+            // 上一秒计算的实时速度
+            auto last_avg = 0;
 
             while (!writed_completed.load())
             {
                 // 每100ms检查一下已完成数量是否存在变化
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 const auto new_value = writed_edges_num->load();
-                if (new_value > last_value)
+                if (new_value > last_100ms_value)
                 {
                     const auto current_time = std::chrono::steady_clock::now();
+
+                    // 上次(以秒为单位)变化到现在耗时多少毫秒
+                    // 超过1秒就更新一次实时速度
+                    const auto last_diff_mill =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(current_time - last_second_time).count();
+                    if (last_diff_mill >= 1000)
+                    {
+                        last_avg = (static_cast<uint64_t>((new_value - last_second_value) * 1000)) / last_diff_mill;
+                        last_second_time  = current_time;
+                        last_second_value = new_value;
+                    }
+
                     // 目前总共耗时秒数
                     const auto total_seconds =
                         std::chrono::duration_cast<std::chrono::seconds>(current_time - t_begin).count();
-
-                    // 上次变化到现在耗时多少毫秒
-                    const auto last_diff_mill =
-                        std::chrono::duration_cast<std::chrono::milliseconds>(current_time - last_value_time).count();
-
-                    bar.update(new_value,
-                               fmt::format("Loading... {}s, complete:{}, rt speed:{}/s",
-                                           total_seconds,
-                                           new_value,
-                                           (new_value - last_value) * 1000 / last_diff_mill));
-                    last_value_time = current_time;
-                    last_value      = new_value;
+                    bar.update(
+                        new_value,
+                        fmt::format("Loading... {}s, complete:{}, rt speed:{}/s", total_seconds, new_value, last_avg));
+                    last_100ms_value = new_value;
                 }
             }
         }).detach();
