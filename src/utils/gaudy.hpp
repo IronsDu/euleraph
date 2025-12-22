@@ -101,7 +101,10 @@ static void play_neon_banner(const std::string logo)
 class NeonArrowBar
 {
 public:
-    NeonArrowBar(const std::string& label, int total, std::chrono::steady_clock::time_point start_time, int width = 40)
+    NeonArrowBar(const std::string&                    label,
+                 uint64_t                              total,
+                 std::chrono::steady_clock::time_point start_time,
+                 int                                   width = 40)
         : label_(label), total_(total), start_time_(start_time), bar_width_(width)
     {
         std::cout << "\033[?25l"; // 隐藏光标
@@ -112,7 +115,7 @@ public:
         finish();
     }
 
-    void update(int current, const std::string& status = "")
+    void update(uint64_t current, const std::string& status = "")
     {
         current          = std::min(current, total_);
         float percentage = static_cast<float>(current) / total_;
@@ -180,7 +183,7 @@ public:
         {
             const auto now     = std::chrono::steady_clock::now();
             const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count();
-            update(total_, fmt::format("Done. Total time:{}s", elapsed));
+            update(total_, fmt::format("Done. Total time:{}s, Avg:{}/s", elapsed, total_ / elapsed));
             std::cout << "\033[?25h" << std::endl; // 恢复光标并换行
             finished_ = true;
         }
@@ -188,7 +191,7 @@ public:
 
 private:
     std::string                                 label_;
-    int                                         total_;
+    uint64_t                                    total_;
     int                                         bar_width_;
     bool                                        finished_ = false;
     const std::chrono::steady_clock::time_point start_time_; // 存储起始时间
