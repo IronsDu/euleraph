@@ -48,8 +48,8 @@ TEST_F(ut_wiredtiger_impl, normal)
 
     writer_wiredtiger->write_vertices(vertices);
 
-    auto a_vertex_id = reader_wiredtiger->get_vertex_id(person_label_id.value(), "a");
-    auto b_vertex_id = reader_wiredtiger->get_vertex_id(dog_label_id.value(), "b");
+    auto a_vertex_id = reader_wiredtiger->get_vertex_by_pk("a")->vertex_id;
+    auto b_vertex_id = reader_wiredtiger->get_vertex_by_pk("b")->vertex_id;
 
     auto like_relation_id = reader_wiredtiger->get_relation_type_id(LikeRelationTypeName);
     ASSERT_EQ(like_relation_type_id_second, like_relation_id.value());
@@ -57,19 +57,19 @@ TEST_F(ut_wiredtiger_impl, normal)
     std::vector<WriterInterface::Edge> edges;
     edges.push_back({like_relation_id.value(),
                      person_label_id.value(),
-                     a_vertex_id.value(),
+                     a_vertex_id,
                      EdgeDirection::INCOMING,
                      dog_label_id.value(),
-                     b_vertex_id.value()});
+                     b_vertex_id});
     edges.push_back({like_relation_id.value(),
                      person_label_id.value(),
-                     a_vertex_id.value(),
+                     a_vertex_id,
                      EdgeDirection::INCOMING,
                      dog_label_id.value(),
                      3});
     edges.push_back({like_relation_id.value(),
                      person_label_id.value(),
-                     a_vertex_id.value(),
+                     a_vertex_id,
                      EdgeDirection::INCOMING,
                      dog_label_id.value(),
                      4});
@@ -79,20 +79,20 @@ TEST_F(ut_wiredtiger_impl, normal)
 
     writer_wiredtiger->write_edges(edges);
 
-    const auto neighbors_edges = reader_wiredtiger->get_neighbors_by_start_vertex(a_vertex_id.value(),
+    const auto neighbors_edges = reader_wiredtiger->get_neighbors_by_start_vertex(a_vertex_id,
                                                                                   person_label_id.value(),
                                                                                   EdgeDirection::INCOMING,
                                                                                   like_relation_id.value());
     ASSERT_EQ(neighbors_edges.size(), 3);
     for (const auto& neighbor : neighbors_edges)
     {
-        ASSERT_EQ(neighbor.start_vertex_id, a_vertex_id.value());
+        ASSERT_EQ(neighbor.start_vertex_id, a_vertex_id);
         ASSERT_EQ(neighbor.start_label_type_id, person_label_id.value());
         ASSERT_EQ(neighbor.relation_type_id, like_relation_id.value());
         ASSERT_EQ(neighbor.direction, EdgeDirection::INCOMING);
         ASSERT_EQ(neighbor.end_label_type_id, dog_label_id.value());
         std::cout << neighbor.end_vertex_id << std::endl;
-        ASSERT_TRUE(neighbor.end_vertex_id == b_vertex_id.value() || neighbor.end_vertex_id == 2 ||
+        ASSERT_TRUE(neighbor.end_vertex_id == b_vertex_id || neighbor.end_vertex_id == 2 ||
                     neighbor.end_vertex_id == 3 || neighbor.end_vertex_id == 4);
     }
 
@@ -104,20 +104,20 @@ TEST_F(ut_wiredtiger_impl, normal)
     auto like_relation_type_name = reader_wiredtiger->get_relation_type_by_id(like_relation_id.value());
     ASSERT_EQ(like_relation_type_name.value(), LikeRelationTypeName);
 
-    auto a_vertex_pk = reader_wiredtiger->get_vertex_pk_by_id(a_vertex_id.value());
-    ASSERT_EQ(a_vertex_pk.value(), "a");
-    auto b_vertex_pk = reader_wiredtiger->get_vertex_pk_by_id(b_vertex_id.value());
-    ASSERT_EQ(b_vertex_pk.value(), "b");
+    auto a_vertex_pk = reader_wiredtiger->get_vertex_by_id(a_vertex_id)->vertex_pk;
+    ASSERT_EQ(a_vertex_pk, "a");
+    auto b_vertex_pk = reader_wiredtiger->get_vertex_by_id(b_vertex_id)->vertex_pk;
+    ASSERT_EQ(b_vertex_pk, "b");
 
     const auto check_scan_vertex_id = [&](const ReaderWiredTiger::Ptr reader) {
         reader->scan_vertex_id([&](VertexId vertex_id, LabelTypeId label_type_id) {
-            ASSERT_TRUE(vertex_id == a_vertex_id.value() || vertex_id == b_vertex_id.value());
+            ASSERT_TRUE(vertex_id == a_vertex_id || vertex_id == b_vertex_id);
             ASSERT_TRUE(label_type_id == person_label_id.value() || vertex_id == dog_label_id.value());
-            if (vertex_id == a_vertex_id.value())
+            if (vertex_id == a_vertex_id)
             {
                 ASSERT_EQ(label_type_id, person_label_id.value());
             }
-            else if (vertex_id == b_vertex_id.value())
+            else if (vertex_id == b_vertex_id)
             {
                 ASSERT_EQ(label_type_id, dog_label_id.value());
             }

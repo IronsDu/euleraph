@@ -13,6 +13,14 @@ class ReaderInterface
 public:
     using Ptr = std::shared_ptr<ReaderInterface>;
 
+    // 顶点结构体, 表示图中的一个顶点
+    struct Vertex
+    {
+        LabelTypeId label_type_id; // 标签类型ID
+        VertexPk    vertex_pk;     // 顶点唯一标识, 目前是全局唯一(不仅仅是标签类型内唯一)
+        VertexId    vertex_id;     // 顶点ID, 内部使用, 全局唯一
+    };
+
 public:
     virtual ~ReaderInterface() = default;
 
@@ -36,25 +44,20 @@ public:
     // @return 关系类型名称，如果不存在则返回std::nullopt
     virtual std::optional<RelationType> get_relation_type_by_id(RelationTypeId relation_type_id) = 0;
 
-    // @brief 根据顶点唯一标识数组获取对用的顶点Id
+    // @brief 根据顶点唯一标识数组获取顶点唯一Id
     // @param vertex_pks 顶点唯一标识数组
     // @return 顶点ID数组, 如果某些标识不存在则其对应位置为std::nullopt
     virtual std::vector<std::optional<VertexId>> get_vertex_ids(const std::vector<VertexPk>& vertex_pks) = 0;
 
-    // @brief 根据标签类型ID和顶点唯一标识获取顶点ID
-    // @param label_type_id 标签类型ID
+    // @brief 根据顶点唯一标识获取顶点
     // @param vertex_pk 顶点唯一标识
-    // @return 顶点ID, 如果不存在则返回std::nullopt
-    virtual std::optional<VertexId> get_vertex_id(const LabelTypeId& label_type_id, const VertexPk& vertex_pk) = 0;
+    // @return 顶点, 如果不存在则返回std::nullopt
+    virtual std::optional<Vertex> get_vertex_by_pk(const VertexPk& vertex_pk) = 0;
 
-    // @brief 根据顶点id获取其顶点标识(字符串)
+    // @brief 根据顶点id获取顶点
     // @param vertex_id 顶点id(全局唯一)
-    // @return 顶点标识, 如果不存在则返回std::nullopt
-    virtual std::optional<VertexPk> get_vertex_pk_by_id(VertexId vertex_id) = 0;
-
-    // @brief 根据顶点id获取其标签类型ID
-    // @param vertex_id 顶点id(全局唯一)
-    virtual std::optional<LabelTypeId> get_label_id_by_vertex_id(VertexId vertex_id) = 0;
+    // @return 顶点, 如果不存在则返回std::nullopt
+    virtual std::optional<Vertex> get_vertex_by_id(VertexId vertex_id) = 0;
 
     using VertexIdCallback = std::function<void(VertexId, LabelTypeId)>;
     // @brief 遍历所有顶点ID
