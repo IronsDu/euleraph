@@ -14,7 +14,7 @@ using t_uint64 = uint64_t;
 
 struct QueryArg
 {
-    VertexId                    start_vertex_id;
+    std::vector<VertexId>       start_vertex_id_list;
     EdgeDirection               direction;
     int                         k;
     std::vector<RelationTypeId> relation_type_id_list;
@@ -75,8 +75,16 @@ static void copy_adj_count_query_vertex_info_path(t_adj_count_query_vertex_info*
 
 static bool edge_is_equal(const Edge& e1, const Edge& e2)
 {
-    return (e1.start_vertex_id == e2.start_vertex_id) && (e1.end_vertex_id == e2.end_vertex_id) &&
-           (e1.direction == e2.direction) && (e1.relation_type_id == e2.relation_type_id);
+    if (e1.direction == e2.direction)
+    {
+        return (e1.start_vertex_id == e2.start_vertex_id) && (e1.end_vertex_id == e2.end_vertex_id) &&
+               (e1.relation_type_id == e2.relation_type_id);
+    }
+    else
+    {
+        return (e1.start_vertex_id == e2.end_vertex_id) && (e1.end_vertex_id == e2.start_vertex_id) &&
+               (e1.relation_type_id == e2.relation_type_id);
+    }
 }
 
 // 查询边是否已经存在于路径之中
@@ -124,14 +132,11 @@ typedef struct parallel_adj_count_query_level_data
     // 这个互斥锁可以用于保护整个对象，但也不是必须在任何并发场景下都使用它。
     std::mutex           mu;
     std::atomic_uint64_t vertext_counter; // 当前层收集到的顶点计数
-    // 当前层实际的用于去重的顶点hash表（vid_hash_table）的有效个数，
-    // 当不需要去重时，hash_table_num为1，但这也仅仅为了代码统一，此时也并不实际需要访问hash table.
-    int hash_table_num;
     // 去重的顶点hash表，其元素类型为VertexId
-    std::unordered_set<VertexId>* vid_hash_table[MAX_ADJ_COUNT_DISTINCT_HASH_SIZE];
+    std::vector<std::shared_ptr<std::unordered_set<VertexId>>> vid_hash_table;
     // hash_table_mu
     // 用于保护对应的vid_hash_table。vid_hash_table在当前实现中，为了提升性能，其锁层次比mu更高。通常是先对vid_hash_table加锁，再对mu加锁。
-    std::mutex hash_table_mu[MAX_ADJ_COUNT_DISTINCT_HASH_SIZE];
+    std::vector<std::shared_ptr<std::mutex>> hash_table_mu;
     // 等待被处理的顶点数组（为了batch，所以等待同一层的子任务完成后凑够固定N个顶点就开启下一层的邻接查询）
     // 主线程在每一层所有任务结束后，也会查看下层的此待处理队列是否为空，若不为空，则会为下层开启一个子查询任务
     // 这个顶点数组是用于分配到下层任务的顶点
@@ -193,7 +198,7 @@ static void parallel_adj_count_sub_task_complete_with_distinct(t_parallel_adj_co
                                                                const t_uint64                         vid_array_num,
                                                                int                                    hash_table_index)
 {
-    std::unordered_set<VertexId>* vid_hash_table = level_data->vid_hash_table[hash_table_index];
+    auto vid_hash_table = level_data->vid_hash_table[hash_table_index];
     // 是否邻接count查询的最后一层
     const bool     is_last_level         = level_data->next_level_data == NULL;
     const t_uint64 pending_vid_array_cap = level_data->pending_vid_array_cap;
@@ -203,7 +208,7 @@ static void parallel_adj_count_sub_task_complete_with_distinct(t_parallel_adj_co
 
     // 此完成函数会在多个子任务线程执行结束后调用，因此需要加锁
     // 这里对这一批数据对应的hash表对应的互斥锁进行加锁
-    level_data->hash_table_mu[hash_table_index].lock();
+    level_data->hash_table_mu[hash_table_index]->lock();
 
     // 将这一批结果去重，并放入当前等待队列，队列满了就发起下一层任务
     for (; i < vid_array_num; i++, vid_array++)
@@ -246,7 +251,7 @@ static void parallel_adj_count_sub_task_complete_with_distinct(t_parallel_adj_co
         level_data->mu.unlock();
     }
 
-    level_data->hash_table_mu[hash_table_index].unlock();
+    level_data->hash_table_mu[hash_table_index]->unlock();
 
     {
         size_t pending_free_num = array_num(pending_free);
@@ -303,14 +308,14 @@ static void execute_parallel_adj_count_sub_task(t_parallel_adj_count_query_level
 {
     // 保存查询到的一度邻接点数组，每一个hash
     // table对应一个数组成员（成员是一个顶点数组），当不需要去重时，数组实际的成员个数为1.
-    t_array*       adj_vid_array_array[MAX_ADJ_COUNT_DISTINCT_HASH_SIZE];
-    Edge           edge;
-    const size_t   total_level           = (size_t)level_data->total_level_num;
-    const t_bool   is_last_level         = level_data->next_level_data == NULL;
-    const t_uint64 pending_vid_array_cap = level_data->pending_vid_array_cap;
-    t_uint64       i                     = 0;
-    t_uint64       current_pending_num   = 0;
-    const int      hash_table_num        = level_data->hash_table_num;
+    std::vector<t_array*> adj_vid_array_array;
+    Edge                  edge;
+    const size_t          total_level           = (size_t)level_data->total_level_num;
+    const t_bool          is_last_level         = level_data->next_level_data == NULL;
+    const t_uint64        pending_vid_array_cap = level_data->pending_vid_array_cap;
+    t_uint64              i                     = 0;
+    t_uint64              current_pending_num   = 0;
+    const int             hash_table_num        = level_data->vid_hash_table.size();
 
     // 获取实际需要遍历的方向数组
     const EdgeDirection* direction_arr = NULL;
@@ -346,9 +351,9 @@ static void execute_parallel_adj_count_sub_task(t_parallel_adj_count_query_level
 
     {
         int i = 0;
-        for (; i < level_data->hash_table_num; i++)
+        for (; i < level_data->vid_hash_table.size(); i++)
         {
-            adj_vid_array_array[i] = array_new(sizeof(t_adj_count_query_vertex_info*), vid_num);
+            adj_vid_array_array.push_back(array_new(sizeof(t_adj_count_query_vertex_info*), vid_num));
         }
     }
 
@@ -520,10 +525,13 @@ const int MIN_PENDING_VID_ARRAY_CAP = 5000;
 // 每个子任务最多累计的顶点数量
 const int MAX_PENDING_VID_ARRAY_CAP = 50000;
 
-static t_parallel_adj_count_query_level_data* create_parallel_adj_count_query_level_data(QueryArg* query_arg,
-                                                                                         int      pending_vid_array_cap,
-                                                                                         t_bool   distinct,
-                                                                                         t_uint32 parallel_num)
+static t_parallel_adj_count_query_level_data*
+create_parallel_adj_count_query_level_data(QueryArg* query_arg,
+                                           int       pending_vid_array_cap,
+                                           t_bool    distinct,
+                                           t_uint32  parallel_num,
+                                           std::vector<std::shared_ptr<std::unordered_set<VertexId>>> hash_shared_ptrs,
+                                           std::vector<std::shared_ptr<std::mutex>> hash_mutex_shared_ptrs)
 {
     t_parallel_adj_count_query_level_data* level_data = new t_parallel_adj_count_query_level_data;
 
@@ -532,11 +540,8 @@ static t_parallel_adj_count_query_level_data* create_parallel_adj_count_query_le
 
     {
         int i                      = 0;
-        level_data->hash_table_num = MAX_ADJ_COUNT_DISTINCT_HASH_SIZE;
-        for (; i < level_data->hash_table_num; i++)
-        {
-            level_data->vid_hash_table[i] = new std::unordered_set<VertexId>();
-        }
+        level_data->vid_hash_table = hash_shared_ptrs;
+        level_data->hash_table_mu  = hash_mutex_shared_ptrs;
     }
     level_data->pending_vid_array_cap = pending_vid_array_cap;
     level_data->pending_vid_array = (t_adj_count_query_vertex_info**)malloc(sizeof(level_data->pending_vid_array[0]) *
@@ -558,12 +563,22 @@ static t_parallel_adj_count_query_level_data* create_parallel_adj_count_query_le
 static t_parallel_adj_count_query_level_data* create_multi_level_list(QueryArg* query_arg,
                                                                       int       adj_count_query_parallel_num)
 {
+    std::vector<std::shared_ptr<std::unordered_set<VertexId>>> hash_shared_ptrs;
+    std::vector<std::shared_ptr<std::mutex>>                   hash_mutex_shared_ptrs;
+    for (int i = 0; i < MAX_ADJ_COUNT_DISTINCT_HASH_SIZE; i++)
+    {
+        hash_shared_ptrs.push_back(std::make_shared<std::unordered_set<VertexId>>());
+        hash_mutex_shared_ptrs.push_back(std::make_shared<std::mutex>());
+    }
+
     // 最顶层level data，也是第0层
     t_parallel_adj_count_query_level_data* const root_level_data =
         create_parallel_adj_count_query_level_data(query_arg,
                                                    MIN_PENDING_VID_ARRAY_CAP,
                                                    false,
-                                                   adj_count_query_parallel_num);
+                                                   adj_count_query_parallel_num,
+                                                   hash_shared_ptrs,
+                                                   hash_mutex_shared_ptrs);
     // 当前层level data
     t_parallel_adj_count_query_level_data* last_level_data = root_level_data;
     int                                    i               = 0;
@@ -575,7 +590,9 @@ static t_parallel_adj_count_query_level_data* create_multi_level_list(QueryArg* 
             query_arg,
             std::min((i + 1) * MIN_PENDING_VID_ARRAY_CAP, MAX_PENDING_VID_ARRAY_CAP),
             true,
-            adj_count_query_parallel_num);
+            adj_count_query_parallel_num,
+            hash_shared_ptrs,
+            hash_mutex_shared_ptrs);
 
         if (last_level_data != NULL)
         {
@@ -590,27 +607,6 @@ static t_parallel_adj_count_query_level_data* create_multi_level_list(QueryArg* 
     return root_level_data;
 }
 
-// 释放层级对象中去重的hash table，并返回其中的数量
-static void free_level_data_vid_hash_table(t_parallel_adj_count_query_level_data* level_data)
-{
-    int vid_hash_table_index = 0;
-    for (; vid_hash_table_index < level_data->hash_table_num; vid_hash_table_index++)
-    {
-        auto                  vid_hash_table = level_data->vid_hash_table[vid_hash_table_index];
-        t_adj_count_vid_info* vid_info       = NULL;
-        t_uint32              hash_n_cell    = 0;
-        t_uint32              i              = 0;
-
-        if (vid_hash_table == NULL)
-        {
-            continue;
-        }
-
-        delete vid_hash_table;
-        level_data->vid_hash_table[vid_hash_table_index] = NULL;
-    }
-}
-
 static void free_multi_level_list(t_parallel_adj_count_query_level_data* current)
 {
     while (current != NULL)
@@ -620,7 +616,6 @@ static void free_multi_level_list(t_parallel_adj_count_query_level_data* current
 
         delete tmp->task_wg;
 
-        free_level_data_vid_hash_table(tmp);
         {
             t_uint64 i = 0;
             for (; i < tmp->pending_vid_num; i++)
@@ -642,13 +637,20 @@ static t_uint64 parallel_adj_count_query(QueryArg* query_arg, int adj_count_quer
     t_parallel_adj_count_query_level_data* root_level_data =
         create_multi_level_list(query_arg, adj_count_query_parallel_num);
 
-    const t_uint64 vid = query_arg->start_vertex_id;
+    t_array* adj_vid_array = array_new(sizeof(t_adj_count_query_vertex_info*), 1);
 
-    // 直接调用第0层完成，因为我们认为第0层输出的结果（顶点集合）就是vid。
-    t_adj_count_query_vertex_info* info_ptr = create_adj_count_query_vertex_info(1);
-    info_ptr->vid                           = vid;
+    for (const auto& vid : query_arg->start_vertex_id_list)
+    {
+        t_adj_count_query_vertex_info* info_ptr = create_adj_count_query_vertex_info(1);
+        info_ptr->vid                           = vid;
+        array_push_back(adj_vid_array, &info_ptr);
+    }
 
-    parallel_adj_count_sub_task_complete(root_level_data, (t_adj_count_query_vertex_info* const*)&info_ptr, 1, 0);
+    parallel_adj_count_sub_task_complete(root_level_data,
+                                         (t_adj_count_query_vertex_info* const*)array_at(adj_vid_array, 0),
+                                         array_num(adj_vid_array),
+                                         0);
+    array_free(adj_vid_array);
 
     t_uint64 adj_total_count = 0;
     {
@@ -673,11 +675,7 @@ static t_uint64 parallel_adj_count_query(QueryArg* query_arg, int adj_count_quer
 
             // 这一层结束，可以释放其缓冲的vid hash table，并获取其vid的数量
             // 要返回总数，并去掉最顶层的初始顶点
-            if (root_level_data != current_wait_level)
-            {
-                adj_total_count += current_wait_level->vertext_counter.load();
-            }
-            free_level_data_vid_hash_table(current_wait_level);
+            adj_total_count += current_wait_level->vertext_counter.load();
             current_wait_level = current_wait_level->next_level_data;
         }
     }
@@ -687,7 +685,7 @@ static t_uint64 parallel_adj_count_query(QueryArg* query_arg, int adj_count_quer
     return adj_total_count;
 }
 
-int KHopNeighborsCountAlgo::get_k_hop_neighbors_count(const VertexId&                    start_vertex_id,
+int KHopNeighborsCountAlgo::get_k_hop_neighbors_count(const std::vector<VertexId>&       vertex_id_list,
                                                       EdgeDirection                      direction,
                                                       int                                k,
                                                       const std::vector<RelationTypeId>& relation_type_id_list,
@@ -695,7 +693,7 @@ int KHopNeighborsCountAlgo::get_k_hop_neighbors_count(const VertexId&           
                                                       WT_CONNECTION*                     conn)
 {
     QueryArg query_arg;
-    query_arg.start_vertex_id        = start_vertex_id;
+    query_arg.start_vertex_id_list   = vertex_id_list;
     query_arg.direction              = direction;
     query_arg.k                      = k;
     query_arg.relation_type_id_list  = relation_type_id_list;
