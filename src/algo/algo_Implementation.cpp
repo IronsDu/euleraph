@@ -23,36 +23,32 @@ uint64_t AlgoImpl::get_k_hop_neighbor_count(const KHopQueryParams&           par
     }
 
     uint64_t total = 0;
-    for (const auto& start_vertex_id : params.vertex_id_list)
+    if (params.direction == 1)
     {
-        if (params.direction == 1)
-        {
-            total += KHopNeighborsCountAlgo::get_k_hop_neighbors_count(start_vertex_id,
-                                                                       EdgeDirection::OUTGOING,
-                                                                       params.k,
-                                                                       params.relation_label_type_id_list,
-                                                                       params.node_label_type_id_list,
-                                                                       conn);
-        }
-        else if (params.direction == 2)
-        {
-            total += KHopNeighborsCountAlgo::get_k_hop_neighbors_count(start_vertex_id,
-                                                                       EdgeDirection::INCOMING,
-                                                                       params.k,
-                                                                       params.relation_label_type_id_list,
-                                                                       params.node_label_type_id_list,
-                                                                       conn);
-        }
-        else if (params.direction == 3)
-        {
-
-            total += KHopNeighborsCountAlgo::get_k_hop_neighbors_count(start_vertex_id,
-                                                                       EdgeDirection::UNDIRECTED,
-                                                                       params.k,
-                                                                       params.relation_label_type_id_list,
-                                                                       params.node_label_type_id_list,
-                                                                       conn);
-        }
+        total = KHopNeighborsCountAlgo::get_k_hop_neighbors_count(params.vertex_id_list,
+                                                                  EdgeDirection::OUTGOING,
+                                                                  params.k,
+                                                                  params.relation_label_type_id_list,
+                                                                  params.node_label_type_id_list,
+                                                                  conn);
+    }
+    else if (params.direction == 2)
+    {
+        total = KHopNeighborsCountAlgo::get_k_hop_neighbors_count(params.vertex_id_list,
+                                                                  EdgeDirection::INCOMING,
+                                                                  params.k,
+                                                                  params.relation_label_type_id_list,
+                                                                  params.node_label_type_id_list,
+                                                                  conn);
+    }
+    else if (params.direction == 3)
+    {
+        total = KHopNeighborsCountAlgo::get_k_hop_neighbors_count(params.vertex_id_list,
+                                                                  EdgeDirection::UNDIRECTED,
+                                                                  params.k,
+                                                                  params.relation_label_type_id_list,
+                                                                  params.node_label_type_id_list,
+                                                                  conn);
     }
     return total;
 }
