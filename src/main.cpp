@@ -226,6 +226,13 @@ static void create_checkpoint()
 
 int main(int argc, char** argv)
 {
+    // 解析用户参数
+    cli_args param;
+    if (!parse_cli_args(argc, argv, param))
+    {
+        return 1;
+    }
+
     const std::string logo = R"(
 ___________     .__                             .__     
 \_   _____/__ __|  |   ________________  ______ |  |__  
@@ -235,13 +242,6 @@ ___________     .__                             .__
         \/                \/           \/|__|        \/ 
 )";
     play_neon_banner(logo);
-
-    // 解析用户参数
-    cli_args param;
-    if (!parse_cli_args(argc, argv, param))
-    {
-        return 1;
-    }
 
     initialize_log(spdlog::level::from_str(param.log_level));
 
