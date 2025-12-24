@@ -212,14 +212,17 @@ std::vector<std::optional<VertexId>> OneTrxReaderWiredTiger::get_vertex_ids(cons
     return result;
 }
 
-std::optional<VertexId> OneTrxReaderWiredTiger::get_vertex_id(const LabelTypeId& label_type_id,
-                                                              const VertexPk&    vertex_pk)
+std::optional<ReaderInterface::Vertex> OneTrxReaderWiredTiger::get_vertex_by_pk(const VertexPk& vertex_pk)
 {
     int        code   = 0;
     WT_CURSOR* cursor = nullptr;
     DEFER(if (cursor != nullptr) { cursor->close(cursor); });
 
-    code = session_->open_cursor(session_, "index:vertex:vertex_ident_pk_index(id)", nullptr, nullptr, &cursor);
+    code = session_->open_cursor(session_,
+                                 "index:vertex:vertex_ident_pk_index(id,label_type_id)",
+                                 nullptr,
+                                 nullptr,
+                                 &cursor);
     if (code != 0)
     {
         return std::nullopt;
@@ -232,23 +235,24 @@ std::optional<VertexId> OneTrxReaderWiredTiger::get_vertex_id(const LabelTypeId&
         return std::nullopt;
     }
 
-    uint64_t record_number = 0;
-    code                   = cursor->get_value(cursor, &record_number);
+    Vertex vertex;
+    vertex.vertex_pk = vertex_pk;
+    code             = cursor->get_value(cursor, &vertex.vertex_id, &vertex.label_type_id);
     if (code != 0)
     {
         return std::nullopt;
     }
 
-    return record_number;
+    return vertex;
 }
 
-std::optional<VertexPk> OneTrxReaderWiredTiger::get_vertex_pk_by_id(VertexId vertex_id)
+std::optional<ReaderInterface::Vertex> OneTrxReaderWiredTiger::get_vertex_by_id(VertexId vertex_id)
 {
     int        code   = 0;
     WT_CURSOR* cursor = nullptr;
     DEFER(if (cursor != nullptr) { cursor->close(cursor); });
 
-    code = session_->open_cursor(session_, "table:vertex(vertex_ident)", nullptr, nullptr, &cursor);
+    code = session_->open_cursor(session_, "table:vertex(label_type_id,vertex_ident)", nullptr, nullptr, &cursor);
     if (code != 0)
     {
         return std::nullopt;
@@ -261,14 +265,15 @@ std::optional<VertexPk> OneTrxReaderWiredTiger::get_vertex_pk_by_id(VertexId ver
         return std::nullopt;
     }
 
+    LabelTypeId label_type_id;
     const char* vertex_pk = nullptr;
-    code                  = cursor->get_value(cursor, &vertex_pk);
+    code                  = cursor->get_value(cursor, &label_type_id, &vertex_pk);
     if (code != 0)
     {
         return std::nullopt;
     }
 
-    return VertexPk(vertex_pk);
+    return ReaderInterface::Vertex{label_type_id, vertex_pk, vertex_id};
 }
 
 void OneTrxReaderWiredTiger::scan_vertex_id(ReaderInterface::VertexIdCallback callback)
