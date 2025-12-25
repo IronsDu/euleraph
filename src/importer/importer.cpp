@@ -408,9 +408,12 @@ void Importer::import_data(const std::string&     file_path,
                     // 目前总共耗时秒数
                     const auto total_seconds =
                         std::chrono::duration_cast<std::chrono::seconds>(current_time - t_begin).count();
-                    bar.update(
-                        new_value,
-                        fmt::format("Loading... {}s, complete:{}, rt speed:{}/s", total_seconds, new_value, last_avg));
+                    bar.update(new_value,
+                               fmt::format("Loading... {}s, complete:{}, avg:{}/s, rt speed:{}/s",
+                                           total_seconds,
+                                           new_value,
+                                           new_value / (std::max<int>(total_seconds, 1)),
+                                           last_avg));
                     last_100ms_value = new_value;
                 }
             }
