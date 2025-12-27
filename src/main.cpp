@@ -26,29 +26,25 @@ const std::string DefaultLogLevel    = std::string("info");
 
 static int DefaultConcurrency()
 {
-    // 目前单并发写入边,因为多个并发时会有冲突问题
     return 1;
 }
 
 struct cli_args
 {
-    cli_args()
-    {
-        batch_size  = DEFAULT_BATCH_SIZE;
-        concurrency = DefaultConcurrency();
-        port        = PORT;
-    }
-
     // 数据库目录
     std::string database_dir;
     // excel 文件路径
-    std::string            data_path;
-    int                    batch_size;
-    int                    concurrency;
-    int                    port;
-    bool                   need_import = DefaultNeedImport;
-    int                    cache_size  = CacheSize; // MB
-    std::string            log_level   = DefaultLogLevel;
+    std::string data_path;
+    int         batch_size  = DEFAULT_BATCH_SIZE;
+    int         concurrency = DefaultConcurrency();
+    int         port        = PORT;
+    bool        need_import = DefaultNeedImport;
+    int         cache_size  = CacheSize; // MB
+    std::string log_level   = DefaultLogLevel;
+    // wiredtiger的最大驱逐线程数
+    // 默认值为CPU核心数的一半，至少为1
+    int evict_threads_max = std::max<int>(std::thread::hardware_concurrency() / 2, 1);
+
     std::optional<int64_t> csv_row_num;
 };
 
@@ -70,35 +66,42 @@ static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
                                            {"data_path"});
     args::Flag                   need_import(parser,
                            "need_import",
-                           fmt::format("whether need import data (optional, default:{})", DefaultNeedImport),
+                           fmt::format("whether need import data (optional, default:{})", out_args.need_import),
                                              {"need_import"},
-                           DefaultNeedImport);
+                           out_args.need_import);
 
-    args::ValueFlag<int>         batch_size(parser,
+    args::ValueFlag<int> batch_size(parser,
                                     "batch_size",
-                                    fmt::format("batch size (optional, default:{})", DEFAULT_BATCH_SIZE),
-                                            {"batch_size"},
-                                    DEFAULT_BATCH_SIZE);
-    args::ValueFlag<int>         concurrency(parser,
+                                    fmt::format("batch size (optional, default:{})", out_args.cache_size),
+                                    {"batch_size"},
+                                    out_args.batch_size);
+    args::ValueFlag<int> concurrency(parser,
                                      "concurrency",
-                                     fmt::format("Concurrency (optional, default:{})", DefaultConcurrency()),
-                                             {"concurrency"},
-                                     DefaultConcurrency());
-    args::ValueFlag<int>         port(parser, "port", "Port (optional)", {"port"}, PORT);
-    args::ValueFlag<int>         cache_size(parser,
-                                    "cache_size",
-                                    fmt::format("WiredTiger Cache size in MB (optional, default:{})", CacheSize),
-                                            {"cache_size"},
-                                    CacheSize);
+                                     fmt::format("Concurrency (optional, default:{})", out_args.concurrency),
+                                     {"concurrency"},
+                                     out_args.concurrency);
+    args::ValueFlag<int> port(parser, "port", "Port (optional)", {"port"}, out_args.port);
+    args::ValueFlag<int> cache_size(
+        parser,
+        "cache_size",
+        fmt::format("WiredTiger Cache size in MB (optional, default:{})", out_args.cache_size),
+        {"cache_size"},
+        out_args.cache_size);
     args::ValueFlag<std::string> log_level(parser,
                                            "log_level",
-                                           fmt::format("Log level (optional, default:{})", DefaultLogLevel),
+                                           fmt::format("Log level (optional, default:{})", out_args.log_level),
                                            {"log_level"},
-                                           DefaultLogLevel);
+                                           out_args.log_level);
     args::ValueFlag<int64_t>     csv_row_num(parser,
                                          "csv_row_num",
                                          "number of rows in csv file (optional, default: all rows)",
                                              {"csv_row_num"});
+    args::ValueFlag<int>         evict_threads_max(
+        parser,
+        "evict_threads_max",
+        fmt::format("WiredTiger max evict threads (optional, default:{})", out_args.evict_threads_max),
+        {"evict_threads_max"},
+        out_args.evict_threads_max);
 
     try
     {
@@ -138,6 +141,10 @@ static bool parse_cli_args(int argc, char** argv, cli_args& out_args)
             {
                 throw args::ParseError("csv_row_num must be a positive integer.");
             }
+        }
+        if (evict_threads_max)
+        {
+            out_args.evict_threads_max = args::get(evict_threads_max);
         }
 
         if (out_args.batch_size <= 0 || out_args.concurrency <= 0 || out_args.port <= 0 || out_args.cache_size <= 0)
@@ -249,18 +256,22 @@ ___________     .__                             .__
     spdlog::flush_every(std::chrono::seconds(1));
 
     wiredtiger_initialize_databse_schema(param.database_dir);
-    if (wiredtiger_open(param.database_dir.c_str(),
-                        nullptr,
-                        fmt::format("create,cache_size={}MB", param.cache_size).c_str(),
-                        &conn) != 0)
+    if (wiredtiger_open(
+            param.database_dir.c_str(),
+            nullptr,
+            fmt::format("create,cache_size={}MB,eviction=(threads_max={})", param.cache_size, param.evict_threads_max)
+                .c_str(),
+            &conn) != 0)
     {
         spdlog::error("Failed to open euleraph database at {}", param.database_dir);
         return 1;
     }
 
-    spdlog::info("Euleraph database opened at {}, cache size:{}MB, wirte edge concurrency:{}, and batch size:{}",
+    spdlog::info("Euleraph database opened at {}, cache size:{}MB,  evict_threads_max:{}, wirte edge concurrency:{}, "
+                 "and batch size:{}",
                  param.database_dir,
                  param.cache_size,
+                 param.evict_threads_max,
                  param.concurrency,
                  param.batch_size);
 
