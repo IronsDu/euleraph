@@ -363,6 +363,7 @@ void Importer::import_data(const std::string&     file_path,
         else
         {
             io::LineReader lr(file_path);
+            lr.next_line(); // skip header
             while (lr.next_line())
             {
                 line_count++;
@@ -409,9 +410,10 @@ void Importer::import_data(const std::string&     file_path,
                     const auto total_seconds =
                         std::chrono::duration_cast<std::chrono::seconds>(current_time - t_begin).count();
                     bar.update(new_value,
-                               fmt::format("Loading... {}s, complete:{}, avg:{}/s, rt speed:{}/s",
+                               fmt::format("Loading... {}s, progress:{}/{}, avg:{}/s, rt speed:{}/s",
                                            total_seconds,
                                            new_value,
+                                           line_count,
                                            new_value / (std::max<int>(total_seconds, 1)),
                                            last_avg));
                     last_100ms_value = new_value;
