@@ -183,7 +183,8 @@ public:
         {
             const auto now     = std::chrono::steady_clock::now();
             const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count();
-            update(total_, fmt::format("Done. Total time:{}s, Avg:{}/s", elapsed, total_ / elapsed));
+            update(total_,
+                   fmt::format("Done. Elapsed time:{}s, Total num:{}, Avg:{}/s", elapsed, total_, total_ / elapsed));
             std::cout << "\033[?25h" << std::endl; // 恢复光标并换行
             finished_ = true;
         }
