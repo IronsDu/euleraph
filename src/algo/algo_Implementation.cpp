@@ -557,6 +557,48 @@ int AlgoImpl::get_subgraph_matching_count(const SubgraphMatchingParams& params, 
     return static_cast<int>(total);
 }
 
+uint64_t
+AlgoImpl::get_adj_count(const AdjCountQueryParams& params, std::shared_ptr<ReaderInterface> reader, WT_CONNECTION* conn)
+{
+    if (params.k <= 0 || params.vertex_id_list.empty())
+    {
+        return 0;
+    }
+
+    uint64_t total = 0;
+    if (params.direction == 1)
+    {
+        total = KHopNeighborsCountAlgo::get_adj_count(params.vertex_id_list,
+                                                      EdgeDirection::OUTGOING,
+                                                      params.k,
+                                                      params.relation_label_type_id_list,
+                                                      params.node_label_type_id_list,
+                                                      params.need_distinct,
+                                                      conn);
+    }
+    else if (params.direction == 2)
+    {
+        total = KHopNeighborsCountAlgo::get_adj_count(params.vertex_id_list,
+                                                      EdgeDirection::INCOMING,
+                                                      params.k,
+                                                      params.relation_label_type_id_list,
+                                                      params.node_label_type_id_list,
+                                                      params.need_distinct,
+                                                      conn);
+    }
+    else if (params.direction == 3)
+    {
+        total = KHopNeighborsCountAlgo::get_adj_count(params.vertex_id_list,
+                                                      EdgeDirection::UNDIRECTED,
+                                                      params.k,
+                                                      params.relation_label_type_id_list,
+                                                      params.node_label_type_id_list,
+                                                      params.need_distinct,
+                                                      conn);
+    }
+    return total;
+}
+
 std::shared_ptr<AlgoInterface> create_algo()
 {
     return std::make_shared<AlgoImpl>();

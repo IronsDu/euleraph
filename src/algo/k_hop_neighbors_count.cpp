@@ -6,6 +6,7 @@
 
 #include "storage/one_trx_reader_wiredtiger.hpp"
 
+#include "utils/defer.hpp"
 #include "utils/gdm_array.h"
 #include "utils/wait_group.hpp"
 #include "utils/thread_pool.hpp"
@@ -703,4 +704,157 @@ int KHopNeighborsCountAlgo::get_k_hop_neighbors_count(const std::vector<VertexId
     // 获取CPU核数
     int cpu_core_num = std::thread::hardware_concurrency();
     return parallel_adj_count_query(&query_arg, cpu_core_num);
+}
+
+uint64_t KHopNeighborsCountAlgo::get_adj_count(const std::vector<VertexId>&       vertex_id_list,
+                                               EdgeDirection                      direction,
+                                               int                                k,
+                                               const std::vector<RelationTypeId>& relation_type_id_list,
+                                               const std::vector<LabelTypeId>&    end_label_type_id_list,
+                                               bool                               distinct,
+                                               WT_CONNECTION*                     conn)
+{
+    std::shared_ptr<ReaderInterface> reader = make_adj_query_reader(conn);
+    DEFER(release_adj_query_reader());
+
+    // 获取实际需要遍历的方向数组
+    const EdgeDirection* direction_arr = NULL;
+    int                  direction_num = 0;
+    switch (direction)
+    {
+    case EdgeDirection::INCOMING:
+    {
+        static const EdgeDirection DIRECTION_ARRAY[] = {EdgeDirection::INCOMING};
+        direction_arr                                = DIRECTION_ARRAY;
+        direction_num                                = sizeof(DIRECTION_ARRAY) / sizeof(DIRECTION_ARRAY[0]);
+    }
+    break;
+    case EdgeDirection::OUTGOING:
+    {
+        static const EdgeDirection DIRECTION_ARRAY[] = {EdgeDirection::OUTGOING};
+        direction_arr                                = DIRECTION_ARRAY;
+        direction_num                                = sizeof(DIRECTION_ARRAY) / sizeof(DIRECTION_ARRAY[0]);
+    }
+    break;
+    case EdgeDirection::UNDIRECTED:
+    {
+        // 若cypher-server指定的方向为OP_DIRECTION_BOTH，则我们需要遍历N和OUT。
+        static const EdgeDirection DIRECTION_ARRAY[] = {EdgeDirection::INCOMING, EdgeDirection::OUTGOING};
+        direction_arr                                = DIRECTION_ARRAY;
+        direction_num                                = sizeof(DIRECTION_ARRAY) / sizeof(DIRECTION_ARRAY[0]);
+    }
+    break;
+    default:
+        break;
+        // do nothing
+    }
+
+    std::vector<VertexId>        vids;
+    std::unordered_set<VertexId> current_level_vids;
+    if (distinct)
+    {
+        current_level_vids.insert(vertex_id_list.begin(), vertex_id_list.end());
+        vids.insert(vids.end(), current_level_vids.begin(), current_level_vids.end());
+    }
+    else
+    {
+        vids = vertex_id_list;
+    }
+
+    std::unordered_set<VertexId> vid_hash;
+    while (k-- > 0)
+    {
+        vid_hash.clear();
+
+        std::vector<VertexId> next_level_vids;
+        next_level_vids.reserve(1000000);
+
+        const auto process_neighbors_edges = [&](const std::vector<Edge>& edges) {
+            if (end_label_type_id_list.empty())
+            {
+                if (!distinct)
+                {
+                    for (const auto& edge : edges)
+                    {
+                        next_level_vids.push_back(edge.end_vertex_id);
+                    }
+                }
+                else
+                {
+                    for (const auto& edge : edges)
+                    {
+                        const auto it = vid_hash.find(edge.end_vertex_id);
+                        if (it != vid_hash.end())
+                        {
+                            continue;
+                        }
+                        vid_hash.insert(edge.end_vertex_id);
+                        next_level_vids.push_back(edge.end_vertex_id);
+                    }
+                }
+            }
+            else
+            {
+                for (const auto& edge : edges)
+                {
+                    // haslabel 过滤
+                    bool found = false;
+                    for (const auto& label_type_id : end_label_type_id_list)
+                    {
+                        if (label_type_id == edge.end_label_type_id)
+                        {
+                            found = true;
+                        }
+                    }
+                    if (!found)
+                    {
+                        continue;
+                    }
+
+                    if (!distinct)
+                    {
+                        next_level_vids.push_back(edge.end_vertex_id);
+                    }
+                    else
+                    {
+                        const auto it = vid_hash.find(edge.end_vertex_id);
+                        if (it != vid_hash.end())
+                        {
+                            continue;
+                        }
+                        vid_hash.insert(edge.end_vertex_id);
+                        next_level_vids.push_back(edge.end_vertex_id);
+                    }
+                }
+            }
+        };
+
+        for (const auto& current_vid : vids)
+        {
+            for (int direction_index = 0; direction_index < direction_num; direction_index++)
+            {
+                const EdgeDirection direction = direction_arr[direction_index];
+
+                LabelTypeId dummy = 1;
+                if (relation_type_id_list.empty())
+                {
+                    auto neighbors_edges =
+                        reader->get_neighbors_by_start_vertex(current_vid, dummy, direction, std::nullopt);
+                    process_neighbors_edges(neighbors_edges);
+                }
+                else
+                {
+                    for (const auto& relation_type_id : relation_type_id_list)
+                    {
+                        auto neighbors_edges =
+                            reader->get_neighbors_by_start_vertex(current_vid, dummy, direction, relation_type_id);
+                        process_neighbors_edges(neighbors_edges);
+                    }
+                }
+            }
+        }
+        vids = std::move(next_level_vids);
+    }
+
+    return vids.size();
 }

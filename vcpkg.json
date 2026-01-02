@@ -1,12 +1,13 @@
 {
-    "dependencies": [
-        "wiredtiger",
-        "drogon",
-        "xlnt",
-        "gtest",
-        "args",
-        "gperftools",
-        "spdlog"
-    ],
-    "builtin-baseline": "1a82cb06a64163a6ac17fd2ae01fd35e5ded9364"
+  "dependencies": [
+    "wiredtiger",
+    "drogon",
+    "xlnt",
+    "gtest",
+    "args",
+    "gperftools",
+    "spdlog",
+    "reflectcpp"
+  ],
+  "builtin-baseline": "1a82cb06a64163a6ac17fd2ae01fd35e5ded9364"
 }

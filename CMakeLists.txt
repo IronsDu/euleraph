@@ -36,11 +36,18 @@ find_package(args CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(WIREDTIGER REQUIRED wiredtiger)
+find_package(reflectcpp CONFIG REQUIRED)
 
 target_include_directories(euleraph PRIVATE ${WIREDTIGER_INCLUDE_DIRS})
 target_link_directories(euleraph PRIVATE ${WIREDTIGER_LIBRARY_DIRS})
 
-target_link_libraries(euleraph PRIVATE Drogon::Drogon ${WIREDTIGER_LIBRARIES} xlnt::xlnt taywee::args spdlog::spdlog)
+target_link_libraries(euleraph PRIVATE 
+    Drogon::Drogon 
+    ${WIREDTIGER_LIBRARIES} 
+    xlnt::xlnt 
+    taywee::args 
+    spdlog::spdlog
+    reflectcpp::reflectcpp)
 
 # 是否启用tcmalloc
 if(euleraph_USE_TCMALLOC)
