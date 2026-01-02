@@ -5,6 +5,8 @@
 #include <vector>
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
+#include <rfl/json.hpp>
+#include <rfl.hpp>
 
 void EuleraphHttpHandle::ping(const HttpRequestPtr& req, drogon::AdviceCallback&& callback)
 {
@@ -630,6 +632,120 @@ void EuleraphHttpHandle::subgraph_matching_query(const HttpRequestPtr&          
             // 4. 业务逻辑：调用算法接口计算子图匹配(子图同态)总数
             auto algo             = create_algo();
             int  count            = algo->get_subgraph_matching_count(*params, reader);
+            jsonResponse["code"]  = 0;
+            jsonResponse["count"] = count;
+        }
+        else
+        {
+            jsonResponse["code"] = -1;
+        }
+
+        auto resp = HttpResponse::newHttpJsonResponse(jsonResponse);
+        resp->setStatusCode(k200OK);
+        callback(resp);
+    }
+    catch (const std::exception& e)
+    {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setContentTypeCode(CT_TEXT_PLAIN);
+        resp->setBody(std::string("Error: ") + e.what());
+        callback(resp);
+    }
+}
+
+struct HttpAdjCountQueryParams
+{
+    int                                     k;         // 跳数（K ≥ 1）
+    int                                     direction; // 遍历方向：1:出向；2:入向；3:双向/无向
+    std::vector<std::string>                node_ids;  // 起始节点 ID 列表
+    std::optional<std::vector<std::string>> n_labels;  // 节点标签（可选）
+    std::optional<std::vector<std::string>> r_labels;  // 边标签（可选）
+    std::optional<bool>                     distinct;  // 是否需要去重
+};
+
+std::optional<AdjCountQueryParams> parse_adj_count_query_params(HttpAdjCountQueryParams          httpParams,
+                                                                std::shared_ptr<ReaderInterface> reader)
+{
+    AdjCountQueryParams params;
+
+    for (const auto& item : httpParams.node_ids)
+    {
+        auto node = reader->get_vertex_by_pk(item);
+        if (!node)
+        {
+            spdlog::error("Vertex not found:{}", item);
+            return std::nullopt;
+        }
+        params.vertex_id_list.push_back(node->vertex_id);
+    }
+
+    params.k = httpParams.k;
+
+    if (httpParams.n_labels)
+    {
+        for (const auto& item : httpParams.n_labels.value())
+        {
+            auto node_label_type_id = reader->get_label_type_id(item);
+            if (!node_label_type_id)
+            {
+                spdlog::error("Label label not found:{}", item);
+                return std::nullopt;
+            }
+            params.node_label_type_id_list.push_back(*node_label_type_id);
+        }
+    }
+
+    if (httpParams.r_labels)
+    {
+        for (const auto& item : httpParams.r_labels.value())
+        {
+            auto relation_label_type_id = reader->get_relation_type_id(item);
+            if (!relation_label_type_id)
+            {
+                spdlog::error("Relation label not found:{}", item);
+                return std::nullopt;
+            }
+            params.relation_label_type_id_list.push_back(*relation_label_type_id);
+        }
+    }
+
+    params.direction = httpParams.direction;
+
+    if (httpParams.distinct)
+    {
+        params.need_distinct = httpParams.distinct.value();
+    }
+    return params;
+}
+
+void EuleraphHttpHandle::adj_count_query(const HttpRequestPtr&                         req,
+                                         std::function<void(const HttpResponsePtr&)>&& callback,
+                                         std::shared_ptr<ReaderInterface>              reader,
+                                         WT_CONNECTION*                                conn)
+{
+    // 1. 检查 Content-Type 是否为 JSON
+    if (req->contentType() != CT_APPLICATION_JSON)
+    {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setContentTypeCode(CT_TEXT_PLAIN);
+        resp->setBody("Content-Type must be application/json");
+        callback(resp);
+        return;
+    }
+
+    try
+    {
+        auto httpParams = rfl::json::read<HttpAdjCountQueryParams>(req->getBody());
+
+        Json::Value jsonResponse;
+        // 3.解析json获取算法需要的参数
+        auto params = parse_adj_count_query_params(httpParams.value(), reader);
+        if (params)
+        {
+            auto algo             = create_algo();
+            auto count            = algo->get_adj_count(*params, reader, conn);
             jsonResponse["code"]  = 0;
             jsonResponse["count"] = count;
         }

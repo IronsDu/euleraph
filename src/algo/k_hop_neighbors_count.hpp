@@ -22,4 +22,12 @@ public:
                                          const std::vector<RelationTypeId>& relation_type_id_list,
                                          const std::vector<LabelTypeId>&    end_label_type_id_list,
                                          WT_CONNECTION*                     conn);
+
+    static uint64_t get_adj_count(const std::vector<VertexId>&       vertex_id_list,
+                                  EdgeDirection                      direction,
+                                  int                                k,
+                                  const std::vector<RelationTypeId>& relation_type_id_list,
+                                  const std::vector<LabelTypeId>&    end_label_type_id_list,
+                                  bool                               distinct,
+                                  WT_CONNECTION*                     conn);
 };

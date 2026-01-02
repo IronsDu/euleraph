@@ -27,4 +27,9 @@ public:
     static void subgraph_matching_query(const HttpRequestPtr&                         req,
                                         std::function<void(const HttpResponsePtr&)>&& callback,
                                         std::shared_ptr<ReaderInterface>              reader);
+
+    static void adj_count_query(const HttpRequestPtr&                         req,
+                                std::function<void(const HttpResponsePtr&)>&& callback,
+                                std::shared_ptr<ReaderInterface>              reader,
+                                WT_CONNECTION*                                conn);
 };

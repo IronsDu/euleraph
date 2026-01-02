@@ -368,6 +368,13 @@ ___________     .__                             .__
                               EuleraphHttpHandle::subgraph_matching_query(req, std::move(callback), reader);
                           },
                           {Post});
+    app().registerHandler("/api/v1/algorithms/adj-count",
+                          [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+                              auto reader = std::make_shared<OneTrxReaderWiredTiger>(conn);
+                              EuleraphHttpHandle::adj_count_query(req, std::move(callback), reader, conn);
+                          },
+                          {Post});
+
     app().setUploadPath(web_dir);
     app().run();
 
