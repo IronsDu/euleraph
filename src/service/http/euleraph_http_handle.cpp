@@ -274,10 +274,13 @@ void EuleraphHttpHandle::k_hop_neighbor_query(const HttpRequestPtr&             
         if (params)
         {
             // 4. 业务逻辑：调用算法接口计算k度邻居总数
-            auto algo             = create_algo();
-            auto count            = algo->get_k_hop_neighbor_count(*params, reader, conn);
-            jsonResponse["code"]  = 0;
-            jsonResponse["count"] = count;
+            auto algo            = create_algo();
+            auto count           = algo->get_k_hop_neighbor_count(*params, reader, conn);
+            jsonResponse["code"] = 0;
+
+            Json::Value data;
+            data["count"]        = count;
+            jsonResponse["data"] = data;
         }
         else
         {
@@ -387,10 +390,12 @@ void EuleraphHttpHandle::common_neighbor_query(const HttpRequestPtr&            
         if (params)
         {
             // 4. 业务逻辑：调用算法接口计算共同邻居总数
-            auto algo             = create_algo();
-            int  count            = algo->get_common_neighbor_count(*params, reader);
-            jsonResponse["code"]  = 0;
-            jsonResponse["count"] = count;
+            auto algo            = create_algo();
+            int  count           = algo->get_common_neighbor_count(*params, reader);
+            jsonResponse["code"] = 0;
+            Json::Value data;
+            data["count"]        = count;
+            jsonResponse["data"] = data;
         }
         else
         {
@@ -501,10 +506,12 @@ void EuleraphHttpHandle::wcc_query(const HttpRequestPtr&                        
         if (params)
         {
             // 4. 业务逻辑：调用算法接口计算共同邻居总数
-            auto algo                       = create_algo();
-            int  count                      = algo->get_wcc_count(*params, reader);
-            jsonResponse["code"]            = 0;
-            jsonResponse["component_count"] = count;
+            auto algo            = create_algo();
+            int  count           = algo->get_wcc_count(*params, reader);
+            jsonResponse["code"] = 0;
+            Json::Value data;
+            data["component_count"] = count;
+            jsonResponse["data"]    = data;
         }
         else
         {
@@ -630,10 +637,12 @@ void EuleraphHttpHandle::subgraph_matching_query(const HttpRequestPtr&          
         if (params)
         {
             // 4. 业务逻辑：调用算法接口计算子图匹配(子图同态)总数
-            auto algo             = create_algo();
-            int  count            = algo->get_subgraph_matching_count(*params, reader);
-            jsonResponse["code"]  = 0;
-            jsonResponse["count"] = count;
+            auto algo            = create_algo();
+            int  count           = algo->get_subgraph_matching_count(*params, reader);
+            jsonResponse["code"] = 0;
+            Json::Value data;
+            data["count"]        = count;
+            jsonResponse["data"] = data;
         }
         else
         {
