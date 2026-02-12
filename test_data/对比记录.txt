@@ -1,0 +1,197 @@
+##euleraph
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18282/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+28442
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18282/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["1129Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+28974
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18282/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["2199023256684Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+28955
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18282/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["4398046512167Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+29303
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18282/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "1129Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+29355
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18282/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "2199023256684Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+29354
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18282/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "4398046512167Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+29572
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18282/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "1129Person", "2199023256684Person", "4398046512167Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+30029
+
+
+## rocks
+
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+28442
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["1129Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+28973
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["2199023256684Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+28954
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["4398046512167Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+29302
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "1129Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+29354
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "2199023256684Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+29353
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "4398046512167Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+29571
+
+=====================================================================================================
+curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "1129Person", "2199023256684Person", "4398046512167Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}'
+30026
