@@ -59,54 +59,47 @@ int AlgoImpl::get_common_neighbor_count(const CommonNeighborQueryParams& params,
     if (params.vertex_id_list.size() <= 1)
         return 0;
 
-    params.relation_label_type_id_list;
-    // 为每个点获取邻居，并存成哈希集合
-    std::vector<std::unordered_set<VertexId>> neighbor_sets;
-    for (const auto& vid : params.vertex_id_list)
-    {
-        // 查找当前点的邻居点集合
+    // 获取单个顶点邻居的lambda
+    auto get_neighbors = [&](VertexId vid) -> std::unordered_set<VertexId> {
         std::unordered_set<VertexId> neighbors;
-        std::unordered_set<VertexId> outgoing_neighbors;
+        LabelTypeId                  dummy_label = 0;
+
+        auto process_edges = [&](const std::vector<Edge>& edges) {
+            for (const auto& edge : edges)
+            {
+                neighbors.insert(edge.end_vertex_id);
+            }
+        };
+
         if (params.relation_label_type_id_list.empty())
         {
-            auto edges_outgoing = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::OUTGOING, std::nullopt);
-            for (const auto& e_o : edges_outgoing)
-            {
-                outgoing_neighbors.insert(e_o.end_vertex_id);
-            }
-            auto edges_incoming = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::INCOMING, std::nullopt);
-            for (const auto& e_i : edges_incoming)
-            {
-                if (outgoing_neighbors.count(e_i.end_vertex_id))
-                {
-                    neighbors.insert(e_i.end_vertex_id);
-                }
-            }
+            auto edges_out = reader->get_neighbors_by_start_vertex(vid, dummy_label, EdgeDirection::OUTGOING, std::nullopt);
+            process_edges(edges_out);
+            auto edges_in = reader->get_neighbors_by_start_vertex(vid, dummy_label, EdgeDirection::INCOMING, std::nullopt);
+            process_edges(edges_in);
         }
         else
         {
             for (const auto& r : params.relation_label_type_id_list)
             {
-                auto edges_outgoing = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::OUTGOING, r);
-                for (const auto& e_o : edges_outgoing)
-                {
-                    outgoing_neighbors.insert(e_o.end_vertex_id);
-                }
-                auto edges_incoming = reader->get_neighbors_by_start_vertex(vid, 0, EdgeDirection::INCOMING, r);
-                for (const auto& e_i : edges_incoming)
-                {
-                    if (outgoing_neighbors.count(e_i.end_vertex_id))
-                    {
-                        neighbors.insert(e_i.end_vertex_id);
-                    }
-                }
+                auto edges_out = reader->get_neighbors_by_start_vertex(vid, dummy_label, EdgeDirection::OUTGOING, r);
+                process_edges(edges_out);
+                auto edges_in = reader->get_neighbors_by_start_vertex(vid, dummy_label, EdgeDirection::INCOMING, r);
+                process_edges(edges_in);
             }
         }
+        return neighbors;
+    };
 
-        neighbor_sets.push_back(std::move(neighbors));
+    // 获取所有顶点的邻居集合
+    std::vector<std::unordered_set<VertexId>> neighbor_sets;
+    neighbor_sets.reserve(params.vertex_id_list.size());
+    for (const auto& vid : params.vertex_id_list)
+    {
+        neighbor_sets.push_back(get_neighbors(vid));
     }
 
-    // 找到邻居最少的索引
+    // 找到邻居最少的索引作为基准
     size_t min_idx = 0;
     for (size_t i = 1; i < neighbor_sets.size(); ++i)
     {
@@ -116,30 +109,26 @@ int AlgoImpl::get_common_neighbor_count(const CommonNeighborQueryParams& params,
         }
     }
 
-    // 以 min_idx 的邻居为查询起点
-    std::unordered_set<VertexId> candidates = std::move(neighbor_sets[min_idx]);
-
-    // 用其他点的邻居集合来过滤
-    for (size_t i = 0; i < neighbor_sets.size(); ++i)
+    // 遍历最小集合，检查是否在所有其他集合中存在
+    int count = 0;
+    for (const auto& candidate : neighbor_sets[min_idx])
     {
-        if (i == min_idx)
-            continue; // 跳过自己
-        if (candidates.empty())
-            break; // 提前退出
-
-        std::unordered_set<VertexId> new_candidates;
-        for (const auto& candidate : candidates)
+        bool is_common = true;
+        for (size_t i = 0; i < neighbor_sets.size(); ++i)
         {
-            // 如果这个点也在第 i 个点的邻居中则保留
-            if (neighbor_sets[i].count(candidate))
+            if (i == min_idx)
+                continue;
+            if (neighbor_sets[i].find(candidate) == neighbor_sets[i].end())
             {
-                new_candidates.insert(candidate);
+                is_common = false;
+                break;
             }
         }
-        candidates = std::move(new_candidates);
+        if (is_common)
+            ++count;
     }
 
-    return candidates.size();
+    return count;
 }
 
 // ============================================================
