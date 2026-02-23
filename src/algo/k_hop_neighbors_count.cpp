@@ -686,24 +686,172 @@ static t_uint64 parallel_adj_count_query(QueryArg* query_arg, int adj_count_quer
     return adj_total_count;
 }
 
-int KHopNeighborsCountAlgo::get_k_hop_neighbors_count(const std::vector<VertexId>&       vertex_id_list,
-                                                      EdgeDirection                      direction,
-                                                      int                                k,
-                                                      const std::vector<RelationTypeId>& relation_type_id_list,
-                                                      const std::vector<LabelTypeId>&    end_label_type_id_list,
-                                                      WT_CONNECTION*                     conn)
+int KHopNeighborsCountAlgo::get_k_hop_neighbors_count(const std::vector<VertexId>&           vertex_id_list,
+                                                      EdgeDirection                          direction,
+                                                      int                                    k,
+                                                      const std::vector<RelationTypeId>&     relation_type_id_list,
+                                                      const std::unordered_set<LabelTypeId>& end_label_type_id_list,
+                                                      WT_CONNECTION*                         conn)
 {
-    QueryArg query_arg;
-    query_arg.start_vertex_id_list   = vertex_id_list;
-    query_arg.direction              = direction;
-    query_arg.k                      = k;
-    query_arg.relation_type_id_list  = relation_type_id_list;
-    query_arg.end_label_type_id_list = end_label_type_id_list;
-    query_arg.conn                   = conn;
+    // 边界情况处理
+    if (k <= 0 || vertex_id_list.empty())
+    {
+        return 0;
+    }
 
-    // 获取CPU核数
-    int cpu_core_num = std::thread::hardware_concurrency();
-    return parallel_adj_count_query(&query_arg, cpu_core_num);
+    // 创建reader
+    auto reader = std::make_shared<OneTrxReaderWiredTiger>(conn);
+
+    // 获取实际需要遍历的方向数组
+    const EdgeDirection* direction_arr = nullptr;
+    int                  direction_num = 0;
+    switch (direction)
+    {
+    case EdgeDirection::INCOMING:
+    {
+        static const EdgeDirection DIRECTION_ARRAY[] = {EdgeDirection::INCOMING};
+        direction_arr                                = DIRECTION_ARRAY;
+        direction_num                                = sizeof(DIRECTION_ARRAY) / sizeof(DIRECTION_ARRAY[0]);
+        break;
+    }
+    case EdgeDirection::OUTGOING:
+    {
+        static const EdgeDirection DIRECTION_ARRAY[] = {EdgeDirection::OUTGOING};
+        direction_arr                                = DIRECTION_ARRAY;
+        direction_num                                = sizeof(DIRECTION_ARRAY) / sizeof(DIRECTION_ARRAY[0]);
+        break;
+    }
+    case EdgeDirection::UNDIRECTED:
+    {
+        // 无向边需要同时遍历入边和出边
+        static const EdgeDirection DIRECTION_ARRAY[] = {EdgeDirection::INCOMING, EdgeDirection::OUTGOING};
+        direction_arr                                = DIRECTION_ARRAY;
+        direction_num                                = sizeof(DIRECTION_ARRAY) / sizeof(DIRECTION_ARRAY[0]);
+        break;
+    }
+    default:
+        break;
+    }
+
+    // 全局已访问顶点集合（用于整体去重）
+    std::unordered_set<VertexId> global_visited;
+
+    // 当前层待处理的顶点
+    std::vector<VertexId> current_level;
+    current_level.reserve(vertex_id_list.size());
+
+    const bool need_check_end_vertex_label = !end_label_type_id_list.empty();
+
+    // 初始化：将起点加入已访问集合和当前层
+    for (const auto& vid : vertex_id_list)
+    {
+        const auto vertex = reader->get_vertex_by_id(vid);
+        if (!vertex || (need_check_end_vertex_label && !end_label_type_id_list.contains(vertex->label_type_id)))
+        {
+            continue;
+        }
+        if (global_visited.insert(vid).second)
+        {
+            current_level.push_back(vid);
+        }
+    }
+
+    // 处理邻居的lambda函数
+    auto process_neighbors = [&](VertexId current_vid, std::vector<VertexId>& next_level) {
+        LabelTypeId dummy_label = 1;
+        if (relation_type_id_list.empty())
+        {
+            for (int direction_index = 0; direction_index < direction_num; direction_index++)
+            {
+                const EdgeDirection current_direction = direction_arr[direction_index];
+                const auto          edges =
+                    reader->get_neighbors_by_start_vertex(current_vid, dummy_label, current_direction, std::nullopt);
+                if (need_check_end_vertex_label)
+                {
+                    for (const auto& edge : edges)
+                    {
+                        if (need_check_end_vertex_label && !end_label_type_id_list.contains(edge.end_label_type_id))
+                        {
+                            continue;
+                        }
+                        // 全局去重：只有未访问过的顶点才加入下一层
+                        if (global_visited.insert(edge.end_vertex_id).second)
+                        {
+                            next_level.push_back(edge.end_vertex_id);
+                        }
+                    }
+                }
+                else
+                {
+                    for (const auto& edge : edges)
+                    {
+                        // 全局去重：只有未访问过的顶点才加入下一层
+                        if (global_visited.insert(edge.end_vertex_id).second)
+                        {
+                            next_level.push_back(edge.end_vertex_id);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (int direction_index = 0; direction_index < direction_num; direction_index++)
+            {
+                const EdgeDirection current_direction = direction_arr[direction_index];
+                for (const auto& relation_type_id : relation_type_id_list)
+                {
+                    const auto edges = reader->get_neighbors_by_start_vertex(current_vid,
+                                                                             dummy_label,
+                                                                             current_direction,
+                                                                             relation_type_id);
+                    if (need_check_end_vertex_label)
+                    {
+                        for (const auto& edge : edges)
+                        {
+                            if (need_check_end_vertex_label && !end_label_type_id_list.contains(edge.end_label_type_id))
+                            {
+                                continue;
+                            }
+                            // 全局去重：只有未访问过的顶点才加入下一层
+                            if (global_visited.insert(edge.end_vertex_id).second)
+                            {
+                                next_level.push_back(edge.end_vertex_id);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        for (const auto& edge : edges)
+                        {
+                            // 全局去重：只有未访问过的顶点才加入下一层
+                            if (global_visited.insert(edge.end_vertex_id).second)
+                            {
+                                next_level.push_back(edge.end_vertex_id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    // BFS逐层遍历k层
+    for (int level = 0; level < k && !current_level.empty(); level++)
+    {
+        std::vector<VertexId> next_level;
+        next_level.reserve(current_level.size() * 4); // 预估容量
+
+        for (const auto& current_vid : current_level)
+        {
+            process_neighbors(current_vid, next_level);
+        }
+
+        current_level = std::move(next_level);
+    }
+
+    // 返回整体去重后的邻居数量（减去初始顶点数量）
+    return static_cast<int>(global_visited.size());
 }
 
 uint64_t KHopNeighborsCountAlgo::get_adj_count(const std::vector<VertexId>&       vertex_id_list,

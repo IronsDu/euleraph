@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_set>
 #include <wiredtiger.h>
 
 #include "interface/storage/reader.hpp"
@@ -16,12 +17,12 @@ public:
     // @param k 度数
     // @param relation_type_id_list 关系类型ID列表, 如果为空则表示不过滤关系类型
     // @param end_label_type_id_list 终点标签类型ID列表, 如果为空则表示不过滤终点标签类型
-    static int get_k_hop_neighbors_count(const std::vector<VertexId>&       vertex_id_list,
-                                         EdgeDirection                      direction,
-                                         int                                k,
-                                         const std::vector<RelationTypeId>& relation_type_id_list,
-                                         const std::vector<LabelTypeId>&    end_label_type_id_list,
-                                         WT_CONNECTION*                     conn);
+    static int get_k_hop_neighbors_count(const std::vector<VertexId>&           vertex_id_list,
+                                         EdgeDirection                          direction,
+                                         int                                    k,
+                                         const std::vector<RelationTypeId>&     relation_type_id_list,
+                                         const std::unordered_set<LabelTypeId>& end_label_type_id_list,
+                                         WT_CONNECTION*                         conn);
 
     static uint64_t get_adj_count(const std::vector<VertexId>&       vertex_id_list,
                                   EdgeDirection                      direction,

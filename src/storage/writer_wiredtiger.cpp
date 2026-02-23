@@ -308,13 +308,12 @@ void WriterWiredTiger::write_edges(const std::vector<Edge>& edges)
             code = cursor->insert(cursor);
             if (code != 0)
             {
-                throw std::runtime_error(fmt::format("batch write edge:{}-{}-{}-{}, insert failed code:{} , reson:{}",
+                throw std::runtime_error(fmt::format("batch write edge:{}-{}-{}-{}, insert failed code:{}",
                                                      k.start_vertex_id,
                                                      (int)k.direction,
                                                      k.relation_type_id,
                                                      k.end_vertex_id,
-                                                     code,
-                                                     session_->get_rollback_reason(session_)));
+                                                     code));
             }
         }
     }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_set>
 #include <vector>
 #include <wiredtiger.h>
 
@@ -10,11 +11,11 @@
 
 struct KHopQueryParams
 {
-    int                         k         = 0;               // 跳数（K ≥ 1）
-    int                         direction = 0;               // 遍历方向：1:出向；2:入向；3:双向/无向
-    std::vector<VertexId>       vertex_id_list;              // 起始节点 ID 列表
-    std::vector<LabelTypeId>    node_label_type_id_list;     // 节点标签（可选）
-    std::vector<RelationTypeId> relation_label_type_id_list; // 边标签（可选）
+    int                             k         = 0;               // 跳数（K ≥ 1）
+    int                             direction = 0;               // 遍历方向：1:出向；2:入向；3:双向/无向
+    std::vector<VertexId>           vertex_id_list;              // 起始节点 ID 列表
+    std::unordered_set<LabelTypeId> node_label_type_id_list;     // 节点标签（可选）
+    std::vector<RelationTypeId>     relation_label_type_id_list; // 边标签（可选）
 };
 
 struct CommonNeighborQueryParams
