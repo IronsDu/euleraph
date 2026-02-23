@@ -101,7 +101,7 @@ curl --location 'http://127.0.0.1:18282/api/v1/algorithms/k-hop-neighbors' \
 
 
 =====================================================================================================
-curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/k-hop-neighbors' \
 --header 'Content-Type: application/json' \
 --data '{
     "node_ids": ["933Person"],
@@ -113,7 +113,7 @@ curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
 28442
 
 =====================================================================================================
-curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/k-hop-neighbors' \
 --header 'Content-Type: application/json' \
 --data '{
     "node_ids": ["1129Person"],
@@ -125,7 +125,7 @@ curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
 28973
 
 =====================================================================================================
-curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/k-hop-neighbors' \
 --header 'Content-Type: application/json' \
 --data '{
     "node_ids": ["2199023256684Person"],
@@ -137,7 +137,7 @@ curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
 28954
 
 =====================================================================================================
-curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/k-hop-neighbors' \
 --header 'Content-Type: application/json' \
 --data '{
     "node_ids": ["4398046512167Person"],
@@ -149,7 +149,7 @@ curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
 29302
 
 =====================================================================================================
-curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/k-hop-neighbors' \
 --header 'Content-Type: application/json' \
 --data '{
     "node_ids": ["933Person", "1129Person"],
@@ -161,7 +161,7 @@ curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
 29354
 
 =====================================================================================================
-curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/k-hop-neighbors' \
 --header 'Content-Type: application/json' \
 --data '{
     "node_ids": ["933Person", "2199023256684Person"],
@@ -173,7 +173,7 @@ curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
 29353
 
 =====================================================================================================
-curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/k-hop-neighbors' \
 --header 'Content-Type: application/json' \
 --data '{
     "node_ids": ["933Person", "4398046512167Person"],
@@ -185,7 +185,7 @@ curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
 29571
 
 =====================================================================================================
-curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/k-hop-neighbors' \
 --header 'Content-Type: application/json' \
 --data '{
     "node_ids": ["933Person", "1129Person", "2199023256684Person", "4398046512167Person"],
@@ -195,3 +195,38 @@ curl --location 'http://127.0.0.1:18080/api/v1/algorithms/k-hop-neighbors' \
     "direction": 1
 }'
 30026
+
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/k-hop-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "1129Person", "2199023256684Person", "4398046512167Person"],
+    "k": 5,
+    "n_labels": [],
+    "r_labels": [],
+    "direction": 1
+}' \
+-w "\n\n---------------------------\n总响应时间: %{time_total}s\n"
+
+
+==============
+共同邻居
+
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/common-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["10995116278796Person", "17592186045792Person"],
+    "r_labels": []
+}' \
+-w "\n\n---------------------------\n总响应时间: %{time_total}s\n"
+
+结果为：{"code":0,"data":{"count":2}}
+
+curl --location 'http://127.0.0.1:8200/api/v1/algorithms/common-neighbors' \
+--header 'Content-Type: application/json' \
+--data '{
+    "node_ids": ["933Person", "1103Person"],
+    "r_labels": []
+}' \
+-w "\n\n---------------------------\n总响应时间: %{time_total}s\n"
+
+结果为：{"code":0,"data":{"count":2}}
