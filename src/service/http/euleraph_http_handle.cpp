@@ -199,7 +199,7 @@ std::optional<KHopQueryParams> parse_khop_query_params(const Json::Value&       
                 spdlog::error("Label label not found:{}", item.asString());
                 return std::nullopt;
             }
-            params.node_label_type_id_list.push_back(*node_label_type_id);
+            params.node_label_type_id_list.insert(*node_label_type_id);
         }
     }
 
