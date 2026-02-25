@@ -1,4 +1,5 @@
 #include "importer/importer.hpp"
+#include "importer/csv_external_sort.hpp"
 
 #include <filesystem>
 #include <algorithm>
@@ -355,6 +356,9 @@ void Importer::import_data(const std::string&     file_path,
     }
     else if (file_type == FileType::CSV)
     {
+        // Perform external sort to optimize WiredTiger write performance
+        std::string sorted_file_path = euleraph::ensure_sorted_csv(file_path);
+
         size_t line_count = 0;
         if (csv_row_num)
         {
@@ -362,7 +366,7 @@ void Importer::import_data(const std::string&     file_path,
         }
         else
         {
-            io::LineReader lr(file_path);
+            io::LineReader lr(sorted_file_path);
             lr.next_line(); // skip header
             while (lr.next_line())
             {
@@ -421,7 +425,7 @@ void Importer::import_data(const std::string&     file_path,
             }
         }).detach();
 
-        io::CSVReader<5> csv_reader(file_path);
+        io::CSVReader<5> csv_reader(sorted_file_path);
 
         // 读取标题行，忽略多余的列
         csv_reader.read_header(io::ignore_extra_column, "startId", "startLabel", "edgeLabel", "endId", "endLabel");

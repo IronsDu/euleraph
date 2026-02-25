@@ -20,9 +20,10 @@ message(STATUS "CMAKE_SHARED_LINKER_FLAGS: ${CMAKE_SHARED_LINKER_FLAGS}")
 
 include_directories("${PROJECT_SOURCE_DIR}/src")
 
-add_executable(euleraph src/main.cpp 
-"src/service/http/euleraph_http_handle.cpp" 
+add_executable(euleraph src/main.cpp
+"src/service/http/euleraph_http_handle.cpp"
 "src/importer/importer.cpp"
+"src/importer/csv_external_sort.cpp"
 "src/storage/writer_wiredtiger.cpp"
 "src/storage/reader_wiredtiger.cpp"
 "src/storage/one_trx_reader_wiredtiger.cpp"
